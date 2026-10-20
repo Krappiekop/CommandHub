@@ -1,7 +1,7 @@
 ---
 id: F00
 prioriteit: Must
-status: Backlog
+status: Review
 milestone: "Ontwerp bevestigd"
 ---
 
@@ -25,29 +25,29 @@ Zie onderstaande taken. Nieuwe uitbreidingen krijgen een apart issue; vergroot d
 
 ## Todo
 
-- [ ] Officiële SDK-voorbeelden onderzoeken en een minimale HTTP-MCP-server apart proberen.
-- [ ] Protocolversie, SDK-versie/features en testclient vastleggen.
-- [ ] Dynamische toollisting en toolcalls met één vaste testtool onderzoeken.
-- [ ] Transportbeveiliging, foutmapping en REST/MCP-verschil documenteren.
+- [x] Officiële SDK-documentatie onderzoeken en een minimale HTTP-MCP-server apart proberen.
+- [x] Protocolversie, SDK-versie/features en testclientversie vastleggen voor de herhaalbare controles.
+- [x] Toolontdekking en toolaanroep met één vaste testtool onderzoeken.
+- [x] Transportbeveiliging en REST/MCP-verschil voor de lokale proef documenteren; waargenomen foutgedrag voor een onbekende tool en een extra argument vastleggen. Dit is geen volledige foutmatrix of remote-security-audit.
 
 ## Acceptatiecriteria
 
-- [ ] Echte MCP-client kan één testtool ontdekken en aanroepen.
-- [ ] Keuzes en beperkingen zijn vastgelegd in een beslisdocument.
-- [ ] De proef is duidelijk gescheiden van definitieve functionaliteit.
+- [x] Echte MCP-client kan één testtool ontdekken en aanroepen.
+- [x] Geverifieerde keuzes en beperkingen zijn vastgelegd in een beslisdocument; definitieve F05-keuzes blijven open.
+- [x] De proef is duidelijk gescheiden van definitieve functionaliteit.
 
 ## Bewijs en koppelingen
 
 - GitHub issue: nog aan te maken.
 - Branch: feature/F00-mcp-proef.
 - Pull request: nog niet aangemaakt.
-- Tests/handmatige verificatie: nog vast te leggen.
+- Tests/handmatige verificatie: vanuit de repositoryroot en de proefmap zijn `cargo fmt --check`, `cargo clippy --all-targets --locked -- -D warnings` en `cargo test --locked` geslaagd op Windows. Beide testbuilds vonden 0 tests. MCP Inspector CLI 2.11.0 heeft `tools/list`, onbekende-toolaanroep en `hello` met extra argument getest; `initialize` en succesvolle `tools/call` zijn ook handmatig geverifieerd. Zie de F00-notitie.
+- Beslissingen: [ADR-002](../beslissingen/ADR-002-mcp-proef.md).
 - [Featurenotitie](../../notities/F00-mcp-proef.md).
 
 ## Afronden
 
-- [ ] Relevante controles geslaagd.
-- [ ] Documentatie en notitie bijgewerkt.
-- [ ] Voortgang bijgewerkt.
+- [x] Relevante formatterings-, Clippy- en testbuildcontroles geslaagd; er zijn nog geen automatische tests.
+- [x] Documentatie en notitie bijgewerkt.
+- [x] Voortgang bijgewerkt.
 - [ ] PR gemerged; pas daarna status Klaar.
-

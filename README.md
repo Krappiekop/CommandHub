@@ -4,7 +4,7 @@ CommandHub wordt een configuratiegestuurde MCP-server in Rust die externe comman
 
 ## Huidige status
 
-Dit is de projectbasis. Alleen `GET /status`, logging en Ctrl+C-afhandeling zijn geïmplementeerd. Toolconfiguratie, uitvoering en MCP zijn gepland. De documentatie is een eerste ontwerp dat ik nog moet nalopen en afstemmen.
+De hoofdapplicatie bevat alleen `GET /status`, logging en Ctrl+C-afhandeling. Toolconfiguratie, procesuitvoering en MCP-integratie zijn nog niet geïmplementeerd. De afzonderlijke F00-proef met MCP via HTTP is getest en staat klaar voor review; zie [de F00-notitie](notities/F00-mcp-proef.md). De documentatie en productarchitectuur blijven in ontwikkeling.
 
 ## Installeren en gebruiken
 
@@ -41,7 +41,7 @@ De server luistert alleen lokaal op poort 3000. Stop met Ctrl+C. Apache, PHP en 
 | [Voortgang](docs/voortgang.md) | Korte actuele overdracht |
 | [Features](docs/features/README.md) | Scope, todo's en acceptatiecriteria |
 | [Notities](notities/README.md) | Uitleg en geschiedenis per feature |
-| [Beslissingen](docs/beslissingen/ADR-001-rust-en-axum.md) | Vastgelegde ontwerpkeuzes |
+| Beslissingen: [ADR-001](docs/beslissingen/ADR-001-rust-en-axum.md), [ADR-002](docs/beslissingen/ADR-002-mcp-proef.md) | Vastgelegde ontwerpkeuzes en F00-proefresultaat |
 
 ## Werkwijze
 
@@ -72,4 +72,3 @@ Commit `Cargo.lock` na de eerste build. Dit is een applicatie, dus de lockfile h
 - [Educom werkwijze](https://e-learning.educom.nu/cases/case-workflow/)
 - [Axum](https://docs.rs/axum/0.8/axum/)
 - [Rust MCP SDK](https://github.com/modelcontextprotocol/rust-sdk)
-
