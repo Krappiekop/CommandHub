@@ -1,19 +1,19 @@
 # Huidige voortgang
 
-Bijgewerkt: 2026-10-20.
+Bijgewerkt: 2026-10-21.
 
 ## Actief
 
-F00 staat klaar voor review. De aparte proefserver werkt via Streamable HTTP; MCP Inspector CLI heeft de vaste tool `hello` ontdekt en aangeroepen. De vereiste Cargo-controles zijn op Windows voor zowel de hoofdcrate als de proefcrate geslaagd.
+F00 staat klaar voor review. De aparte proefserver werkt via Streamable HTTP; MCP Inspector CLI heeft de vaste tool `hello` ontdekt en aangeroepen. F01 is lokaal gecontroleerd op Windows: formatter, Clippy, tests (0 tests), build en `GET /status` slagen. Een GitHub Actions-workflow voor Ubuntu en Windows is toegevoegd, maar nog niet op GitHub uitgevoerd.
 
 ## Aanwezig
 
-Documentatieopzet, featureplannen, notities per feature, minimale Axum-statusroute met logging en de geïsoleerde F00-proef onder `prototypes/f00-mcp-probe`. De hoofdapplicatie heeft nog geen toolconfiguratie, executor of MCP-integratie.
+Documentatieopzet, featureplannen, notities per feature, minimale Axum-statusroute met logging, CI-workflow en de geïsoleerde F00-proef onder `prototypes/f00-mcp-probe`. De hoofdapplicatie heeft nog geen toolconfiguratie, executor of MCP-integratie.
 
 ## Nog open
 
 - F00: review en PR-merge door gebruiker. De proef onderzoekt `tool_not_found` en een extra argument; bredere fout- en transportsecuritytests horen bij F05 waar relevant.
-- F01: lokale statusroute, logging en Ctrl+C controleren; formatter en Clippy uitvoeren; repository-inrichting nalopen.
+- F01: `Cargo.lock` committen en repository-/develop-/GitHub-Project-inrichting afronden. CI op GitHub laten draaien; Linux is lokaal niet gecontroleerd. Status blijft open tot review en merge.
 - Daarna F02 verder uitwerken.
 
 ## Volgende sessie
@@ -22,4 +22,4 @@ Review en sync F00 zelf en merge de PR naar `develop`. Daarna F01 lokaal control
 
 ## Verificatie
 
-Op Windows zijn `cargo fmt --check`, `cargo clippy --all-targets --locked -- -D warnings` en `cargo test --locked` uitgevoerd vanuit de repositoryroot en `prototypes/f00-mcp-probe`; alle controles slaagden. Beide `cargo test`-runs vonden 0 tests, en Linux is niet gecontroleerd. MCP Inspector CLI 2.11.0 meldde `tool_not_found` voor een onbekende tool; een extra argument aan parameterloze `hello` werd niet afgewezen. Zie [F00-notitie](../notities/F00-mcp-proef.md) en [ADR-002](beslissingen/ADR-002-mcp-proef.md). Dit verifieert de basis en proef op Windows, maar niet de functionaliteit van de hoofdapplicatie of platformondersteuning op Linux.
+Op Windows zijn voor F01 `cargo fmt --check`, `cargo clippy --all-targets --locked -- -D warnings`, `cargo test --locked`, `cargo build --locked` en een HTTP-request naar `/status` uitgevoerd; alles slaagde. De testbuild bevat 0 tests. De server stopte na Ctrl+C; de terminal gaf exitcode 1 voor de interrupt. De workflow `.github/workflows/ci.yml` is toegevoegd, maar nog niet door GitHub uitgevoerd. Voor F00 zijn de Cargo-controles ook op de hoofdcrate en proefcrate geslaagd; beide test-runs vonden 0 tests. Linux is nog niet geverifieerd. MCP Inspector CLI 2.11.0 meldde `tool_not_found` voor een onbekende tool; een extra argument aan parameterloze `hello` werd niet afgewezen. Zie [F00-notitie](../notities/F00-mcp-proef.md) en [ADR-002](beslissingen/ADR-002-mcp-proef.md). Dit verifieert de basis op Windows, maar niet de platformondersteuning op Linux.
