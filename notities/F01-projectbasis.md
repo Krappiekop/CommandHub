@@ -11,11 +11,11 @@ tags:
 
 ## Wat bouw ik en waarom?
 
-Nog invullen tijdens de uitvoering. De actuele checklist staat in het featureplan.
+F01 controleert de bestaande minimale Axum-applicatie en legt de basis vast voor verdere ontwikkeling. Er is geen nieuwe Rust-functionaliteit toegevoegd. De actuele checklist staat in het featureplan.
 
 ## Hoe werkt de code?
 
-Leg de gegevensstroom, belangrijke types en relevante Rust-concepten in eigen woorden uit. Link naar actuele bronbestanden; kopieer niet voortdurend hele bestanden.
+`main` initialiseert `tracing`, bindt de Tokio-listener aan `127.0.0.1:3000` en start Axum met een router. De router koppelt `GET /status` aan de statuscontroller. Axum verzorgt de HTTP-afhandeling; Tokio levert de async runtime en Ctrl+C-signaalafhandeling. De graceful-shutdown-hook laat Axum stoppen wanneer Ctrl+C wordt ontvangen. Zie [main.rs](../src/main.rs) en [routes.rs](../src/routes.rs).
 
 ## Keuzes en alternatieven
 
@@ -27,17 +27,28 @@ Noteer concrete oorzaak, oplossing en hoe de oplossing is gecontroleerd.
 
 ## Verificatie
 
-Noteer commando, platform, resultaat en beperkingen. Nog niet uitgevoerd.
+Uitgevoerd op Windows op 2026-10-21:
+
+- `cargo fmt --check`: geslaagd.
+- `cargo clippy --all-targets --locked -- -D warnings`: geslaagd.
+- `cargo test --locked`: geslaagd; er zijn nog 0 tests.
+- `cargo build --locked`: geslaagd.
+- `GET http://127.0.0.1:3000/status`: HTTP 200 met `{"status":"ok","applicatie":"commandhub"}`.
+- Startup logging was zichtbaar. Ctrl+C stopte de server; de terminal rapporteerde exitcode 1 doordat het draaiende proces met een interrupt werd afgebroken.
+- CI-workflow voor Ubuntu en Windows toegevoegd in `.github/workflows/ci.yml`; uitvoering op GitHub is nog niet geverifieerd.
+- `Cargo.lock` bestaat al. Committen, repository-/branchinrichting en GitHub Project blijven open gebruikersstappen; hiervoor zijn geen Git-commando's uitgevoerd.
+
+Linux is lokaal niet gecontroleerd. De CI-matrix moet dat na publicatie van de branch aantonen.
 
 ## Werksessies
 
-### Datum nog invullen
+### 2026-10-21
 
-- Doel:
-- Gewijzigd:
-- Geleerd:
-- Gecontroleerd:
-- Open vragen:
+- Doel: F01 lokaal controleren en de Windows/Linux-CI voorbereiden.
+- Gewijzigd: CI-workflow toegevoegd; featurechecklist en deze notitie bijgewerkt.
+- Geleerd: `cargo test` slaagt, maar bewijst nog geen gedragstests omdat er 0 tests zijn.
+- Gecontroleerd: formatter, Clippy, build en de HTTP-statusroute op Windows; details staan hierboven.
+- Open: commit van `Cargo.lock` en de overige Git-/GitHub-inrichting; Linux-controle via CI.
 
 ## Vervolg
 
