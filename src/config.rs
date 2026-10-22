@@ -77,8 +77,6 @@ impl ConfigFile {
 #[serde(deny_unknown_fields)]
 pub struct ToolDefinition {
     pub name: String,
-
-    #[expect(dead_code, reason = "Gebruikt bij het toevoegen van GET /tools")]
     pub description: String,
 
     #[expect(dead_code, reason = "Gebruikt door de procesuitvoerder in F03")]
@@ -93,12 +91,8 @@ pub struct ToolDefinition {
 #[serde(deny_unknown_fields)]
 pub struct ParameterDefinition {
     pub name: String,
-
     #[serde(rename = "type")]
-    #[expect(dead_code, reason = "Gebruikt bij het publiceren van het inputschema")]
     pub kind: ParameterType,
-
-    #[expect(dead_code, reason = "Gebruikt bij het publiceren van het inputschema")]
     pub required: bool,
 }
 
@@ -272,5 +266,32 @@ mod tests {
         let config = ConfigFile { tools: vec![tool] };
 
         assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn invalid_json_is_rejected() {
+        let result = serde_json::from_str::<ConfigFile>(r#"{"tools":["#);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn missing_required_tool_field_is_rejected() {
+        let json = r#"
+    {
+        "tools": [
+            {
+                "name": "git_version",
+                "description": "Show the installed Git version",
+                "arguments": [],
+                "parameters": []
+            }
+        ]
+    }
+    "#;
+
+        let result = serde_json::from_str::<ConfigFile>(json);
+
+        assert!(result.is_err());
     }
 }

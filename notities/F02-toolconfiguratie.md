@@ -17,7 +17,7 @@ Ik laad bij startup een beheerdersconfiguratie met toolbeschrijvingen en maak di
 
 `ConfigFile`, `ToolDefinition` en `ParameterDefinition` beschrijven de JSON-structuur. Serde zet de JSON om naar deze Rust-types. `Option<u64>` maakt een timeout optioneel; de grenscontrole staat in `ConfigFile::validate`. De loader leest standaard `config/tools.json` (of het pad uit `COMMANDHUB_CONFIG`), parseert de inhoud en valideert die vóór startup verdergaat. Zie [src/config.rs](../src/config.rs) en de aanroep bij startup in [src/main.rs](../src/main.rs).
 
-De tests gebruiken `serde_json::from_str` voor deserialisatie en bouwen ook configuraties direct op om validatieregels te testen. Deze fase laadt de tools alleen in; er is nog geen registry of `GET /tools`.
+De gevalideerde configuratie wordt verplaatst naar de immutable [ToolRegistry](../src/registry.rs), gedeeld met Axum via `Arc`, en door `GET /tools` omgezet naar toolmetadata met een JSON Schema-inputschema. De route publiceert niet het command of de vaste argumenten. De routetest controleert de HTTP-status en de volledige responsevorm.
 
 ## Keuzes en alternatieven
 
@@ -34,7 +34,7 @@ Noteer concrete oorzaak, oplossing en hoe de oplossing is gecontroleerd.
 
 ## Verificatie
 
-De gebruiker rapporteert 8 geslaagde tests. Dit is in deze sessie niet opnieuw uitgevoerd. De routes, de foutpaden van de bestandloader en de volledige Cargo-controles zijn nog niet onafhankelijk geverifieerd.
+De gebruiker rapporteert dat 11 tests slagen en dat `GET /tools` werkt. De route is ook handmatig in de browser bekeken. Deze controles zijn in deze documentatiesessie niet opnieuw uitgevoerd. Gericht testen van fouten bij het lezen van het configuratiebestand en de volledige Cargo-controles zijn nog niet onafhankelijk geverifieerd.
 
 ## Werksessies
 
@@ -66,12 +66,12 @@ De gebruiker rapporteert 8 geslaagde tests. Dit is in deze sessie niet opnieuw u
 
 ### 2026-10-22 — configuratie laden en valideren
 
-- Gebouwd: Serde-types voor de config, tools, parameters en het ondersteunde parametertype.
-- Gebouwd: `load()` leest de standaardlocatie of `COMMANDHUB_CONFIG`, deserialiseert JSON en roept validatie aan. De startup van de hoofdapp roept `load()` aan en logt alleen het aantal tools.
-- Gebouwd en getest volgens gebruikersrapport: dubbele toolnamen, timeout buiten 1–60.000 ms, dubbele parameternaam binnen één tool, volledige geldige placeholder, onbekende placeholder en gedeeltelijke placeholder. Ook ontbreken van optionele timeout en afwijzen van een onbekend toolveld zijn getest.
-- Verificatie: gebruiker meldt 8 tests geslaagd; niet opnieuw uitgevoerd in deze sessie.
-- Nog open: tests voor ontbrekende verplichte velden, ongeldige JSON en bestand-laadfouten; registry en `GET /tools`.
+- Gebouwd: Serde-types voor configuratie, tools, parameters en het ondersteunde parametertype. `load()` leest de standaardlocatie of `COMMANDHUB_CONFIG`, deserialiseert JSON en valideert de configuratie; startup logt alleen het aantal tools.
+- Gebouwd: immutable registry, gedeeld via Axum-state, en `GET /tools` met naam, beschrijving en JSON Schema-inputschema. De route laat executable en vaste argumenten weg.
+- Tests volgens gebruikersrapport: 11 slagen. Daaronder deserialisatie, onbekende/ontbrekende velden, tool- en parameternaamvalidatie, timeoutgrenzen, placeholders en de response van `GET /tools`.
+- Handmatige controle volgens gebruiker: server start zonder errors en `/tools` werkt; de response is in de browser bekeken.
+- Nog open: gerichte tests voor configuratiebestand-laadfouten en verificatie dat een nieuw geconfigureerde tool na herstart zichtbaar wordt zonder rebuild. Volledige formatter-, Clippy- en Cargo-testresultaten zijn niet in deze sessie opnieuw uitgevoerd.
 
 ## Vervolg
 
-De volgende F02-stap is een immutable registry uit de gevalideerde configuratie opbouwen en die via Axum-state beschikbaar maken. Daarna volgt `GET /tools` met gerichte routetests. Zie de actuele checklist in het [featureplan](../docs/features/F02-toolconfiguratie.md). Voor F03 blijven toegestane executabletypen en uitvoeringsgrenzen open.
+De volgende F02-stap is gerichte tests toevoegen voor configuratiebestand-laadfouten en het herstartscenario voor een nieuwe tool zonder rebuild aantonen. Daarna kunnen de resterende acceptatiecriteria en volledige controles worden afgerond. Voor F03 blijven toegestane executabletypen en uitvoeringsgrenzen open; zie het [featureplan](../docs/features/F02-toolconfiguratie.md).
