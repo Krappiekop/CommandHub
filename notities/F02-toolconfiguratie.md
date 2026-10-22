@@ -11,15 +11,22 @@ tags:
 
 ## Wat bouw ik en waarom?
 
-Nog invullen tijdens de uitvoering. De actuele checklist staat in het featureplan.
+Ik laad bij startup een beheerdersconfiguratie met toolbeschrijvingen en maak die beschikbaar voor ontdekking via `GET /tools`. Nieuwe tools moeten door configuratie en een herstart toegevoegd kunnen worden, zonder de applicatie opnieuw te compileren. De actuele checklist staat in het [featureplan](../docs/features/F02-toolconfiguratie.md).
 
 ## Hoe werkt de code?
 
-Leg de gegevensstroom, belangrijke types en relevante Rust-concepten in eigen woorden uit. Link naar actuele bronbestanden; kopieer niet voortdurend hele bestanden.
+`ConfigFile`, `ToolDefinition` en `ParameterDefinition` beschrijven de JSON-structuur. Serde zet de JSON om naar deze Rust-types. `Option<u64>` maakt een timeout optioneel; de grenscontrole staat in `ConfigFile::validate`. De loader leest standaard `config/tools.json` (of het pad uit `COMMANDHUB_CONFIG`), parseert de inhoud en valideert die vóór startup verdergaat. Zie [src/config.rs](../src/config.rs) en de aanroep bij startup in [src/main.rs](../src/main.rs).
+
+De tests gebruiken `serde_json::from_str` voor deserialisatie en bouwen ook configuraties direct op om validatieregels te testen. Deze fase laadt de tools alleen in; er is nog geen registry of `GET /tools`.
 
 ## Keuzes en alternatieven
 
-Beschrijf de reden van keuzes en verwijs bij blijvende architectuurbesluiten naar docs/beslissingen/.
+- Start met `string`-parameters en een `required`-boolean; complexere typen zijn nog niet nodig voor de eerste scope.
+- Vervang placeholders alleen wanneer ze een volledig argument innemen. Zo blijven executable en argumenten gescheiden en wordt geen shellcommandoregel opgebouwd.
+- De beheerder bepaalt `command` en vaste argumenten. `command` mag een absoluut pad zijn of een naam die via de server-`PATH` wordt gevonden; clientinvoer kan geen executable instellen.
+- Wijs onbekende configuratievelden af om configuratiefouten vroeg zichtbaar te maken.
+- Een tool mag `timeout` weglaten; dan geldt de standaard van 10.000 ms (10 seconden). Een ingestelde timeout moet tussen 1 en 60.000 ms (60 seconden) liggen.
+- De casus geeft geen volledig executablepadbeleid of uitvoeringslimieten. Die blijven expliciete ontwerpkeuzes; zie [API en configuratie](../docs/api-en-configuratie.md).
 
 ## Problemen en oplossingen
 
@@ -27,19 +34,44 @@ Noteer concrete oorzaak, oplossing en hoe de oplossing is gecontroleerd.
 
 ## Verificatie
 
-Noteer commando, platform, resultaat en beperkingen. Nog niet uitgevoerd.
+De gebruiker rapporteert 8 geslaagde tests. Dit is in deze sessie niet opnieuw uitgevoerd. De routes, de foutpaden van de bestandloader en de volledige Cargo-controles zijn nog niet onafhankelijk geverifieerd.
 
 ## Werksessies
 
-### Datum nog invullen
+### 2026-10-22
 
-- Doel:
-- Gewijzigd:
-- Geleerd:
-- Gecontroleerd:
-- Open vragen:
+- Doel: de casusvoorbeelden vergelijken met de open schema-vragen voor F02.
+- Gewijzigd: het API-contract, het F02-plan, configuratievoorbeelden en deze notitie verduidelijken welke keuzes uit de casus volgen en welke nog vastgesteld moeten worden.
+- Geleerd: de casus toont `string`-parameters, placeholders als argumenten en een timeoutvoorbeeld, maar bepaalt geen standaard- of maximumwaarden en geen executablepadbeleid.
+- Gecontroleerd: huidige implementatie bekeken; alleen `/status` bestaat. Er zijn geen F02-tests of configuratietypen.
+- Open vragen: executablepadbeleid; uitvoeringslimieten voor F03.
+
+### 2026-10-22 — timeout- en configuratieafspraken
+
+- Besluit: standaardtimeout 10 seconden; maximaal configureerbaar 60 seconden. Timeoutwaarden in JSON zijn milliseconden.
+- Besluit: het configuratiebestand biedt dezelfde soort toolinstellingen als het casusvoorbeeld: `name`, `description`, `command`, `arguments`, `parameters` en optioneel `timeout`. Parameters bevatten `name`, `type` (`string`) en `required`.
+- Gewijzigd: het configuratievoorbeeld laat zowel een tool met standaardtimeout als een tool met expliciete timeout zien.
+- Nog niet gecontroleerd: JSON wordt nog niet door de applicatie gelezen; de documentatie beschrijft de afspraak, geen werkende functionaliteit.
+
+### 2026-10-22 — executableselectie
+
+- Besluit: de beheerder mag in `command` een absoluut pad of een executable-naam gebruiken die via de `PATH` van het serverproces wordt gevonden. Clients kunnen deze waarde niet kiezen of aanpassen.
+- Open punt voor F03: toegestane executabletypen en het gedrag voor Windows `.bat`/`.cmd`.
+- Nog niet gecontroleerd: dit is een documentatiekeuze; procesuitvoering is niet geïmplementeerd.
+
+### 2026-10-22 — configuratiepad
+
+- Besluit: standaard leest de server `config/tools.json`, relatief aan de huidige werkdirectory. De omgevingsvariabele `COMMANDHUB_CONFIG` kan een ander bestandspad opgeven.
+- Nog niet gecontroleerd: deze locatiekeuze is nog niet in code geïmplementeerd.
+
+### 2026-10-22 — configuratie laden en valideren
+
+- Gebouwd: Serde-types voor de config, tools, parameters en het ondersteunde parametertype.
+- Gebouwd: `load()` leest de standaardlocatie of `COMMANDHUB_CONFIG`, deserialiseert JSON en roept validatie aan. De startup van de hoofdapp roept `load()` aan en logt alleen het aantal tools.
+- Gebouwd en getest volgens gebruikersrapport: dubbele toolnamen, timeout buiten 1–60.000 ms, dubbele parameternaam binnen één tool, volledige geldige placeholder, onbekende placeholder en gedeeltelijke placeholder. Ook ontbreken van optionele timeout en afwijzen van een onbekend toolveld zijn getest.
+- Verificatie: gebruiker meldt 8 tests geslaagd; niet opnieuw uitgevoerd in deze sessie.
+- Nog open: tests voor ontbrekende verplichte velden, ongeldige JSON en bestand-laadfouten; registry en `GET /tools`.
 
 ## Vervolg
 
-Link naar het featureplan en de eerstvolgende concrete stap. Houd geen tweede afvinklijst bij.
-
+De volgende F02-stap is een immutable registry uit de gevalideerde configuratie opbouwen en die via Axum-state beschikbaar maken. Daarna volgt `GET /tools` met gerichte routetests. Zie de actuele checklist in het [featureplan](../docs/features/F02-toolconfiguratie.md). Voor F03 blijven toegestane executabletypen en uitvoeringsgrenzen open.

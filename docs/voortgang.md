@@ -1,24 +1,26 @@
 # Huidige voortgang
 
-Bijgewerkt: 2026-10-21.
+Bijgewerkt: 2026-10-22.
 
 ## Actief
 
 F00 staat klaar voor review. De aparte proefserver werkt via Streamable HTTP; MCP Inspector CLI heeft de vaste tool `hello` ontdekt en aangeroepen. F01 is lokaal gecontroleerd op Windows: formatter, Clippy, tests (0 tests), build en `GET /status` slagen. Een GitHub Actions-workflow voor Ubuntu en Windows is toegevoegd, maar nog niet op GitHub uitgevoerd.
 
+F02 is in uitvoering. De hoofdapp leest de JSON-configuratie bij startup en valideert dubbele toolnamen, timeoutgrenzen, dubbele parameternamen en placeholders. De gebruiker rapporteert 8 geslaagde tests. De standaardtimeout is 10 seconden (maximaal 60 seconden); standaardbestand is `config/tools.json`, overschrijfbaar met `COMMANDHUB_CONFIG`. `GET /tools`, registry, route-/loaderfouttests en volledige onafhankelijke verificatie zijn nog open. Zie [F02-featureplan](features/F02-toolconfiguratie.md) en [F02-notitie](../notities/F02-toolconfiguratie.md).
+
 ## Aanwezig
 
-Documentatieopzet, featureplannen, notities per feature, minimale Axum-statusroute met logging, CI-workflow en de geïsoleerde F00-proef onder `prototypes/f00-mcp-probe`. De hoofdapplicatie heeft nog geen toolconfiguratie, executor of MCP-integratie.
+Documentatieopzet, featureplannen, notities per feature, minimale Axum-statusroute met logging, F02-configuratielader en tests, CI-workflow en de geïsoleerde F00-proef onder `prototypes/f00-mcp-probe`. De hoofdapplicatie heeft nog geen toolregistry, executor of MCP-integratie.
 
 ## Nog open
 
 - F00: review en PR-merge door gebruiker. De proef onderzoekt `tool_not_found` en een extra argument; bredere fout- en transportsecuritytests horen bij F05 waar relevant.
 - F01: `Cargo.lock` committen en repository-/develop-/GitHub-Project-inrichting afronden. CI op GitHub laten draaien; Linux is lokaal niet gecontroleerd. Status blijft open tot review en merge.
-- Daarna F02 verder uitwerken.
+- F02 verder uitwerken met registry, Axum-state en `GET /tools`.
 
-## Volgende sessie
+## Volgende stap
 
-Review en sync F00 zelf en merge de PR naar `develop`. Daarna F01 lokaal controleren en vervolgens F02 uitwerken.
+Vervolg F02 met registry, Axum-state en `GET /tools`; voeg ook tests toe voor config-laadfouten en routeresponses. F00-review en F01-afronding blijven openstaande projectstappen. Leg voor F03 nog toegestane executabletypen en uitvoeringsgrenzen vast; zie ook [F02-featureplan](features/F02-toolconfiguratie.md) en [F02-notitie](../notities/F02-toolconfiguratie.md).
 
 ## Verificatie
 

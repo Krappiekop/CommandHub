@@ -1,0 +1,11 @@
+{
+    "tools": [
+        {
+            "name": "git_version",
+            "description": "Show the installed Git version",
+            "command": "git",
+            "arguments": ["--version"],
+            "parameters": []
+        }
+    ]
+}
