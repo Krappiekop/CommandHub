@@ -1,7 +1,7 @@
 ---
 id: F02
 prioriteit: Must
-status: In uitvoering
+status: Review
 milestone: "Ontdekken"
 ---
 
@@ -39,11 +39,13 @@ De keuze tussen absoluut pad en zoeken via `PATH` is gemaakt; de toegestane exec
 - [x] GET /tools met beschrijvingen en inputschema's toevoegen.
 - [x] Een gerichte routetest toevoegen die de responsevorm en het weglaten van het command controleert.
 - [ ] Config-bestand laadfouten gericht testen.
+- [x] Config-bestand laadfouten gericht testen.
 
 ## Acceptatiecriteria
 
 - [ ] Ongeldige configuratie verhindert serverstart met bruikbare diagnose.
-- [ ] Nieuwe tool wordt na herstart zichtbaar zonder rebuild.
+- [x] Ongeldige configuratie verhindert serverstart met bruikbare diagnose.
+- [x] Nieuwe tool wordt na herstart zichtbaar zonder rebuild.
 - [x] Dubbele namen en onbekende placeholders worden afgewezen.
 - [x] Placeholders worden alleen als volledig argument vervangen; clients kunnen de executable niet kiezen.
 
@@ -53,11 +55,13 @@ De keuze tussen absoluut pad en zoeken via `PATH` is gemaakt; de toegestane exec
 - Branch: feature/F02-toolconfiguratie.
 - Pull request: nog niet aangemaakt.
 - Tests/handmatige verificatie: gebruiker rapporteert 11 geslaagde tests en bevestigt dat `GET /tools` werkt; zie de F02-notitie.
+- Tests/handmatige verificatie: gerichte configuratietests en controles van startup, herstart zonder rebuild en `GET /tools`; zie de F02-notitie.
 - [Featurenotitie](../../notities/F02-toolconfiguratie.md).
 
 ## Afronden
 
 - [ ] Relevante controles geslaagd.
-- [ ] Documentatie en notitie bijgewerkt.
-- [ ] Voortgang bijgewerkt.
+- [x] Relevante controles geslaagd.
+- [x] Documentatie en notitie bijgewerkt.
+- [x] Voortgang bijgewerkt.
 - [ ] PR gemerged; pas daarna status Klaar.

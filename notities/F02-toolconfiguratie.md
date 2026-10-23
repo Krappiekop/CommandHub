@@ -34,7 +34,9 @@ Noteer concrete oorzaak, oplossing en hoe de oplossing is gecontroleerd.
 
 ## Verificatie
 
-De gebruiker rapporteert dat 11 tests slagen en dat `GET /tools` werkt. De route is ook handmatig in de browser bekeken. Deze controles zijn in deze documentatiesessie niet opnieuw uitgevoerd. Gericht testen van fouten bij het lezen van het configuratiebestand en de volledige Cargo-controles zijn nog niet onafhankelijk geverifieerd.
+De Cargo-controles zijn uitgevoerd: `cargo fmt --check`, `cargo clippy --all-targets --locked -- -D warnings` en `cargo test --locked` slagen. De test-run bevat 14 geslaagde tests. De gerichte laadfouttests controleren ontbrekende bestanden, kapotte JSON en ongeldige configuratie.
+
+Handmatig is bevestigd dat een dubbele toolnaam startup verhindert met de diagnose `Ongeldige configuratie in bestand config/tools.json: Dubbele toolnaam: git_version`. Ook is bevestigd dat een aangepaste toolconfiguratie na herstart zichtbaar wordt via `GET /tools`, zonder rebuild. De response laat command en vaste argumenten weg. Deze controles zijn op Windows uitgevoerd; Linux en de GitHub Actions-workflow zijn hiermee niet geverifieerd.
 
 ## Werksessies
 
@@ -74,4 +76,11 @@ De gebruiker rapporteert dat 11 tests slagen en dat `GET /tools` werkt. De route
 
 ## Vervolg
 
-De volgende F02-stap is gerichte tests toevoegen voor configuratiebestand-laadfouten en het herstartscenario voor een nieuwe tool zonder rebuild aantonen. Daarna kunnen de resterende acceptatiecriteria en volledige controles worden afgerond. Voor F03 blijven toegestane executabletypen en uitvoeringsgrenzen open; zie het [featureplan](../docs/features/F02-toolconfiguratie.md).
+F02 is inhoudelijk gereed en staat ter review. Na review en merge kan de status Klaar worden. Voor F03 blijven toegestane executabletypen en uitvoeringsgrenzen open; zie het [featureplan](../docs/features/F02-toolconfiguratie.md).
+
+### 2026-10-23 — F02 afronden
+
+- Bevestigd: ongeldige configuratie met dubbele toolnaam stopt startup en geeft een foutmelding met bestandspad en oorzaak.
+- Bevestigd: een aangepaste toolconfiguratie wordt na herstart zichtbaar op `GET /tools`, zonder de executable opnieuw te bouwen.
+- Gecontroleerd: formatter, Clippy en 14 tests slagen op Windows.
+- Status: acceptatiecriteria aangetoond; feature staat ter review. Merge is nog niet uitgevoerd.

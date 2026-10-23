@@ -1,6 +1,6 @@
 # Configuratievoorbeelden
 
-Deze documentatie beschrijft het afgesproken eerste JSON-formaat voor F02. De basis leest nog geen configuratiebestand; het voorbeeld is dus nog niet door code gevalideerd.
+Deze documentatie beschrijft het JSON-formaat voor F02. De applicatie leest en valideert dit configuratiebestand bij startup.
 
 Bij startup leest de server standaard `config/tools.json`, relatief aan de huidige werkdirectory. De beheerder kan een andere bestandslocatie instellen met de omgevingsvariabele `COMMANDHUB_CONFIG`.
 
@@ -42,6 +42,6 @@ Een tool heeft een naam, beschrijving, executable (`command`), lijst losse argum
 }
 ```
 
-`timeout` weglaten betekent 10 seconden. Een ingestelde timeout moet groter zijn dan 0 en maximaal 60 seconden zijn. De voorbeelden volgen de casus en zijn bedoeld om het configureerbare model te tonen. Ze zijn nog niet geïmplementeerd of volledig beveiligd: F02 moet ze nog strikt inlezen en valideren. De genoemde `ls`-opdracht is niet op elk platform beschikbaar; kies bij gebruik een platformgeschikte executable.
+`timeout` weglaten betekent 10 seconden. Een ingestelde timeout moet groter zijn dan 0 en maximaal 60 seconden zijn. De applicatie leest het voorbeeldformaat strikt in en wijst onbekende velden en ongeldige configuraties af. De voorbeelden tonen configuratie; procesuitvoering en bijbehorende beveiligingsgrenzen vallen buiten F02. De genoemde `ls`-opdracht is niet op elk platform beschikbaar; kies bij uitvoering een platformgeschikte executable.
 
 De client levert alleen parameterwaarden en kan `command` of vaste argumenten niet wijzigen. De toegestane executabletypen (waaronder eventueel Windows `.bat`/`.cmd`) en uitvoer- en capaciteitsgrenzen moeten vóór generieke uitvoering in F03 worden vastgelegd.

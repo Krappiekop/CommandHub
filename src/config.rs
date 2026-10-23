@@ -107,7 +107,11 @@ pub fn load() -> Result<ConfigFile, std::io::Error> {
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| std::path::PathBuf::from("config/tools.json"));
 
-    let contents = std::fs::read_to_string(&path).map_err(|error| {
+    load_from_path(&path)
+}
+
+fn load_from_path(path: &std::path::Path) -> Result<ConfigFile, std::io::Error> {
+    let contents = std::fs::read_to_string(path).map_err(|error| {
         std::io::Error::new(
             error.kind(),
             format!(
@@ -293,5 +297,54 @@ mod tests {
         let result = serde_json::from_str::<ConfigFile>(json);
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn missing_config_file_returns_not_found() {
+        let path =
+            std::env::temp_dir().join(format!("commandhub-missing-config-{}", std::process::id()));
+
+        let error = load_from_path(&path).unwrap_err();
+
+        assert_eq!(error.kind(), std::io::ErrorKind::NotFound);
+    }
+
+    #[test]
+    fn invalid_json_file_returns_invalid_data() {
+        let path = std::env::temp_dir().join(format!(
+            "commandhub-invalid-json-{}.json",
+            std::process::id()
+        ));
+
+        std::fs::write(&path, r#"{"tools:["#).expect("testbestand moet geschreven kunnen worden");
+
+        let error = load_from_path(&path).expect_err("kapotte JSON moet worden afgewezen");
+
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+        assert!(error.to_string().contains("Ongeldige JSON"));
+
+        std::fs::remove_file(path).expect("testbestand moet opgeruimd kunnen worden");
+    }
+
+    #[test]
+    fn invalid_config_file_returns_invalid_data() {
+        let path = std::env::temp_dir().join(format!(
+            "commandhub-invalid-config-{}.json",
+            std::process::id()
+        ));
+
+        let json = r#"{"tools":[
+            {"name":"duplicate","description":"First","command":"test","arguments":[],"parameters":[]},
+            {"name":"duplicate","description":"Second","command":"test","arguments":[],"parameters":[]}
+        ]}"#;
+
+        std::fs::write(&path, json).expect("testbestand moet geschreven kunnen worden");
+
+        let error = load_from_path(&path).expect_err("dubbele toolnamen moeten worden afgewezen");
+
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+        assert!(error.to_string().contains("Ongeldige configuratie"));
+
+        std::fs::remove_file(path).expect("testbestand moet opgeruimd kunnen worden");
     }
 }
