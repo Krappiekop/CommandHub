@@ -4,7 +4,7 @@ CommandHub wordt een configuratiegestuurde MCP-server in Rust die externe comman
 
 ## Huidige status
 
-De hoofdapplicatie bevat alleen `GET /status`, logging en Ctrl+C-afhandeling. Toolconfiguratie, procesuitvoering en MCP-integratie zijn nog niet geïmplementeerd. De afzonderlijke F00-proef met MCP via HTTP is getest en staat klaar voor review; zie [de F00-notitie](notities/F00-mcp-proef.md). De documentatie en productarchitectuur blijven in ontwikkeling.
+De hoofdapplicatie bevat `GET /status`, JSON-toolconfiguratie bij startup, een immutable toolregistry en `GET /tools` voor ontdekking. Procesuitvoering en MCP-integratie in de hoofdapplicatie zijn nog niet geïmplementeerd. De afzonderlijke F00-proef met MCP via HTTP is getest en staat klaar voor review; zie [de F00-notitie](notities/F00-mcp-proef.md). F02 staat ter review; zie [de actuele voortgang](docs/voortgang.md).
 
 ## Installeren en gebruiken
 
@@ -62,7 +62,7 @@ cargo clippy --all-targets --locked -- -D warnings
 cargo test --locked
 ```
 
-De basis bevat nog geen automatische tests. Een geslaagde `cargo test` met nul tests bewijst alleen dat de testbuild slaagt. Gerichte tests worden bij de features toegevoegd.
+De features voegen gerichte automatische tests toe. `cargo test --locked` voert de huidige tests uit; bekijk de testuitvoer om te zien welke tests daadwerkelijk zijn uitgevoerd.
 
 Commit `Cargo.lock` na de eerste build. Dit is een applicatie, dus de lockfile hoort bij de repository.
 
