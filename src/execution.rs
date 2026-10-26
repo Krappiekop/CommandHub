@@ -1,9 +1,13 @@
-use std::{ io, process::Stdio, sync::Arc, time::Duration };
+use std::{io, process::Stdio, sync::Arc, time::Duration};
 
 use axum::extract::rejection::BytesRejection::FailedToBufferBody;
-use tokio::{ process::Command, io::{AsyncReadExt, AsyncWriteExt}, sync::{ OwnedSemaphorePermit, Semaphore } };
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    process::Command,
+    sync::{OwnedSemaphorePermit, Semaphore},
+};
 
-use crate::{ config::ToolDefinition, registry::ToolRegistry };
+use crate::{config::ToolDefinition, registry::ToolRegistry};
 
 #[derive(Debug)]
 pub struct ExecutionResult {
@@ -56,7 +60,7 @@ impl ExecutionService {
 
 pub fn find_parameterless_tool<'a>(
     registry: &'a ToolRegistry,
-    name: &str
+    name: &str,
 ) -> Result<&'a ToolDefinition, ExecutionError> {
     let tool = registry
         .tools()
@@ -65,7 +69,8 @@ pub fn find_parameterless_tool<'a>(
         .ok_or(ExecutionError::UnknownTool)?;
 
     let has_parameters = !tool.parameters.is_empty();
-    let has_placeholders = tool.arguments
+    let has_placeholders = tool
+        .arguments
         .iter()
         .any(|argument| (argument.contains('{') || argument.contains('}')));
 
@@ -90,16 +95,20 @@ fn create_command(tool: &ToolDefinition) -> Command {
 
 async fn read_capped<R>(
     mut reader: R,
-    budget: Arc<Semaphore>
+    budget: Arc<Semaphore>,
 ) -> Result<CapturedOutput, ExecutionError>
-    where R: tokio::io::AsyncRead + Unpin
+where
+    R: tokio::io::AsyncRead + Unpin,
 {
     let mut bytes = Vec::new();
     let mut budget_permits = Vec::new();
     let mut buffer = [0_u8; 8192];
 
     loop {
-        let bytes_read = reader.read(&mut buffer).await.map_err(ExecutionError::OutputReadFailed)?;
+        let bytes_read = reader
+            .read(&mut buffer)
+            .await
+            .map_err(ExecutionError::OutputReadFailed)?;
 
         if bytes_read == 0 {
             break;
@@ -140,7 +149,7 @@ impl std::fmt::Display for ExecutionError {
 impl std::error::Error for ExecutionError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            | Self::ProcessStartFailed(error)
+            Self::ProcessStartFailed(error)
             | Self::OutputReadFailed(error)
             | Self::ProcessWaitFailed(error) => Some(error),
             _ => None,
@@ -151,7 +160,7 @@ impl std::error::Error for ExecutionError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{ ConfigFile, ParameterDefinition, ParameterType };
+    use crate::config::{ConfigFile, ParameterDefinition, ParameterType};
 
     fn test_registry(parameters: Vec<ParameterDefinition>) -> ToolRegistry {
         let config = ConfigFile {
@@ -172,9 +181,8 @@ mod tests {
     fn vindt_parameterloze_tool() {
         let registry = test_registry(Vec::new());
 
-        let tool = find_parameterless_tool(&registry, "git_versie").expect(
-            "de ingestelde tool zonder parameters moet worden gevonden"
-        );
+        let tool = find_parameterless_tool(&registry, "git_versie")
+            .expect("de ingestelde tool zonder parameters moet worden gevonden");
 
         assert_eq!(tool.command, "git");
     }
@@ -190,29 +198,33 @@ mod tests {
 
     #[test]
     fn weigert_tool_met_parameters() {
-        let registry = test_registry(
-            vec![ParameterDefinition {
-                name: "pad".to_owned(),
-                kind: ParameterType::String,
-                required: true,
-            }]
-        );
+        let registry = test_registry(vec![ParameterDefinition {
+            name: "pad".to_owned(),
+            kind: ParameterType::String,
+            required: true,
+        }]);
 
         let resultaat = find_parameterless_tool(&registry, "git_versie");
 
-        assert!(matches!(resultaat, Err(ExecutionError::ParametersNotSupported)));
+        assert!(matches!(
+            resultaat,
+            Err(ExecutionError::ParametersNotSupported)
+        ));
     }
 
     #[tokio::test]
     async fn leest_output_binnen_de_limiet() {
         let (mut schrijver, lezer) = tokio::io::duplex(16);
-        schrijver.write_all(b"uitvoer").await.expect("testuitvoer moet geschreven worden");
+        schrijver
+            .write_all(b"uitvoer")
+            .await
+            .expect("testuitvoer moet geschreven worden");
         drop(schrijver);
 
         let budget = Arc::new(Semaphore::new(MAX_OUTPUT_BYTES));
-        let uitvoer = read_capped(lezer, budget).await.expect(
-            "uitvoer onder de limiet moet worden gelezen"
-        );
+        let uitvoer = read_capped(lezer, budget)
+            .await
+            .expect("uitvoer onder de limiet moet worden gelezen");
 
         assert_eq!(uitvoer.bytes, b"uitvoer");
     }
@@ -220,12 +232,18 @@ mod tests {
     #[tokio::test]
     async fn weigert_output_boven_de_limiet() {
         let (mut schrijver, lezer) = tokio::io::duplex(16);
-        schrijver.write_all(b"12345").await.expect("testuitvoer moet geschreven worden");
+        schrijver
+            .write_all(b"12345")
+            .await
+            .expect("testuitvoer moet geschreven worden");
         drop(schrijver);
 
         let budget = Arc::new(Semaphore::new(4));
         let resultaat = read_capped(lezer, budget).await;
 
-        assert!(matches!(resultaat, Err(ExecutionError::OutputLimitExceeded)));
+        assert!(matches!(
+            resultaat,
+            Err(ExecutionError::OutputLimitExceeded)
+        ));
     }
 }
