@@ -1,6 +1,6 @@
 # Testplan
 
-Status: het volledige testplan is gepland. F00 is handmatig met een echte MCP-client getest; F02 heeft automatische configuratie- en routetests. De F03-uitvoeringstests zijn nog niet geïmplementeerd.
+Status: het volledige testplan is gepland. F00 is handmatig met een echte MCP-client getest; F02 heeft automatische configuratie- en routetests. Voor F03 zijn vijf unit tests voor toolselectie en outputlimiet geslaagd; procesintegratie en de overige uitvoeringsscenario's zijn nog niet getest.
 
 | Eisen | Bewijs |
 | --- | --- |

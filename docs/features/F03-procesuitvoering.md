@@ -36,8 +36,10 @@ Zie onderstaande taken. Nieuwe uitbreidingen krijgen een apart issue; vergroot d
 
 ## Todo
 
-- [ ] Gedeelde kernresultaten en fouttypen definiëren.
-- [ ] Executor maken met losse argumenten, gesloten stdin en het vastgestelde omgevingsbeleid.
+- [x] Gedeelde kernresultaten en fouttypen definiëren.
+- [x] Command-opbouw met geconfigureerde executable, losse vaste argumenten, gesloten stdin en gepipete stdout/stderr voorbereiden.
+- [ ] Executor maken en de procesuitvoering integreren met het vastgestelde omgevingsbeleid.
+- [x] Semaphore voor maximaal vier gelijktijdige uitvoeringen en een helper voor de gecombineerde outputlimiet toevoegen.
 - [ ] Timeout, outputlimiet en concurrentielimiet implementeren.
 - [ ] Annulering, shutdown en procesboomgedrag onderzoeken en implementeren volgens gekozen scope.
 - [ ] POST /tools/{toolname} voor tools zonder dynamische parameters aansluiten.
@@ -56,7 +58,7 @@ Zie onderstaande taken. Nieuwe uitbreidingen krijgen een apart issue; vergroot d
 - GitHub issue: nog vast te leggen.
 - Branch: feature/F03-procesuitvoering.
 - Pull request: nog niet aangemaakt.
-- Tests/handmatige verificatie: nog niet uitgevoerd; zie de F03-notitie.
+- Tests/handmatige verificatie: vijf gerichte unit tests geslaagd volgens gebruiker; zie de F03-notitie. Procesintegratie is nog niet getest.
 - [Featurenotitie](../../notities/F03-procesuitvoering.md).
 
 ## Afronden

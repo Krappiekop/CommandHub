@@ -3,6 +3,7 @@ mod controllers;
 mod models;
 mod registry;
 mod routes;
+mod execution;
 
 use std::error::Error;
 use std::sync::Arc;

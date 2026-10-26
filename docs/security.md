@@ -1,6 +1,6 @@
 # Securityontwerp
 
-Status: F02-configuratievalidatie is geïmplementeerd. De F03-uitvoeringsmaatregelen hieronder zijn ontwerpafspraken en worden tijdens F03 geïmplementeerd en getest.
+Status: F02-configuratievalidatie is geïmplementeerd. F03 heeft eerste helpers voor argumentgescheiden command-opbouw en een outputbudget; de volledige uitvoeringsmaatregelen hieronder zijn nog niet geïntegreerd of geverifieerd.
 
 ## Vertrouwensgrenzen
 

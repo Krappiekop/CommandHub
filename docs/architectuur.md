@@ -1,6 +1,6 @@
 # Architectuur
 
-Status: de statusroute, configuratielader, immutable registry en `GET /tools` zijn geïmplementeerd. De procesuitvoerder en MCP-adapter zijn nog niet geïmplementeerd; F03 werkt aan de procesuitvoerder.
+Status: de statusroute, configuratielader, immutable registry en `GET /tools` zijn geïmplementeerd. F03 bevat eerste executor-typen en helpers voor toolselectie, command-opbouw, capaciteit en begrensde output. De volledige procesuitvoering en MCP-adapter zijn nog niet geïmplementeerd.
 
 ## Beoogde gegevensstroom
 

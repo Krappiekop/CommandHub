@@ -11,11 +11,15 @@ tags:
 
 ## Wat bouw ik en waarom?
 
-F03 voegt een gedeelde, begrensde procesuitvoerder en `POST /tools/{toolname}` toe voor geconfigureerde tools zonder dynamische parameters. Daarmee kan de server tools gecontroleerd uitvoeren zonder executablekeuze of shellopbouw vanuit clientinvoer. De actuele checklist staat in het [featureplan](../docs/features/F03-procesuitvoering.md). De implementatie is nog niet begonnen.
+F03 voegt een gedeelde, begrensde procesuitvoerder en `POST /tools/{toolname}` toe voor geconfigureerde tools zonder dynamische parameters. Daarmee kan de server tools gecontroleerd uitvoeren zonder executablekeuze of shellopbouw vanuit clientinvoer. De eerste uitvoeringsstructuren en helpers zijn toegevoegd; het proces wordt nog niet gestart en de HTTP-route bestaat nog niet. De actuele checklist staat in het [featureplan](../docs/features/F03-procesuitvoering.md).
 
 ## Hoe werkt de code?
 
-De bestaande code heeft nog geen procesuitvoerder. Tijdens de implementatie leg ik hier de gegevensstroom, resultaat- en fouttypen, en gebruikte Rust-concepten uit met links naar de actuele bronbestanden.
+In `src/execution.rs` beschrijft `ExecutionResult` een afgeronde run en onderscheidt `ExecutionError` de uitvoeringsfouten. `find_parameterless_tool` zoekt in de registry en weigert tools met parameters of placeholders. De lifetime `'a` geeft aan dat de gevonden `ToolDefinition` geleend wordt uit de registry.
+
+`ExecutionService` houdt met `Arc<Semaphore>` een gedeelde capaciteit bij. `try_acquire_owned` wijst direct af wanneer de vier permits bezet zijn; een `OwnedSemaphorePermit` geeft de plek automatisch terug wanneer hij wordt gedropt. `create_command` bouwt een Tokio-`Command` met executable en argumenten apart en sluit stdin.
+
+`read_capped` leest een async stream in blokken van 8192 bytes. Een gedeelde semaphore bewaakt het gezamenlijke outputbudget; de permits blijven bij `CapturedOutput` bewaard zolang de bytes in het geheugen staan. De helper geeft een fout bij overschrijding, maar beëindigt zelf geen proces. De procescoördinatie, gelijktijdig lezen van beide streams en opruiming moeten nog worden gebouwd.
 
 ## Keuzes en alternatieven
 
@@ -34,19 +38,19 @@ Noteer concrete oorzaak, oplossing en hoe de oplossing is gecontroleerd.
 
 ## Verificatie
 
-Nog niet uitgevoerd. Noteer per controle commando, platform, resultaat en beperkingen.
+Vijf gerichte tests zijn door de gebruiker uitgevoerd op Windows met `cargo test --locked execution::tests`; alle vijf slaagden. Ze testen parameterloze toolselectie, weigering van onbekende tools en tools met parameters, plus output onder en boven de helperlimiet. Dit test nog geen gestart proces, timeout of procesopruiming. De volledige formatter-, Clippy- en testcontroles zijn voor deze tussenstand nog niet gemeld.
 
 ## Werksessies
 
 ### 2026-10-26 — F03 gestart
 
 - Doel: F03 voorbereiden en uitvoeringsafspraken vastleggen.
-- Gewijzigd: documentatiecontract bijgewerkt; branch `feature/F03-procesuitvoering` actief.
+- Gewijzigd: gedeelde uitvoeringsresultaten en fouttypen, parameterloze toolselectie, command-opbouw, concurrency- en outputbudgethelpers, en vijf unit tests. Documentatie bijgewerkt; branch `feature/F03-procesuitvoering` actief.
 - Geleerd: procesboomopruiming moet expliciet per platform worden gerealiseerd en getest; een timeouterror alleen bewijst niet dat subprocessen zijn beëindigd.
-- Gecontroleerd: huidige branch en schone werkboom gecontroleerd. Er is nog geen F03-code of gedragstest.
-- Open vragen: issue-referentie vastleggen; procesboomimplementatie en tests op Windows/Linux uitvoeren.
+- Gecontroleerd: vijf gerichte unit tests slagen volgens gebruiker. De complete procesuitvoering is nog niet aanwezig.
+- Open vragen: issue-referentie vastleggen; procescoördinatie, timeout, outputstream-concurrency, procesboomimplementatie en tests op Windows/Linux uitvoeren.
 
 ## Vervolg
 
-Begin met de gedeelde uitvoeringsresultaten en fouttypen volgens het [featureplan](../docs/features/F03-procesuitvoering.md); daarna volgen executor, HTTP-route en tests. Markeer niets als geverifieerd totdat de betreffende controle is uitgevoerd.
+Vervolg met het starten en beheren van het childproces: stdout en stderr gelijktijdig begrensd lezen, timeout en outputoverschrijding afhandelen en het proces opruimen. Daarna volgen de HTTP-route en integratietests. Markeer niets als geverifieerd totdat de betreffende controle is uitgevoerd.
 

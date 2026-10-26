@@ -4,7 +4,7 @@ CommandHub wordt een configuratiegestuurde MCP-server in Rust die externe comman
 
 ## Huidige status
 
-De hoofdapplicatie bevat `GET /status`, JSON-toolconfiguratie bij startup, een immutable toolregistry en `GET /tools` voor ontdekking. F02 is gemerged. F03, de begrensde procesuitvoering via HTTP, is gestart maar nog niet geïmplementeerd. MCP-integratie in de hoofdapplicatie volgt later; de afzonderlijke F00-proef met MCP via HTTP staat klaar voor review. Zie [de actuele voortgang](docs/voortgang.md), [de F00-notitie](notities/F00-mcp-proef.md) en [de F03-notitie](notities/F03-procesuitvoering.md).
+De hoofdapplicatie bevat `GET /status`, JSON-toolconfiguratie bij startup, een immutable toolregistry en `GET /tools` voor ontdekking. F02 is gemerged. F03 is gestart: de eerste executor-typen en begrensde uitvoerhelper hebben gerichte tests, maar volledige procesuitvoering en de HTTP-uitvoerroute zijn nog niet gereed. MCP-integratie in de hoofdapplicatie volgt later; de afzonderlijke F00-proef met MCP via HTTP staat klaar voor review. Zie [de actuele voortgang](docs/voortgang.md), [de F00-notitie](notities/F00-mcp-proef.md) en [de F03-notitie](notities/F03-procesuitvoering.md).
 
 ## Installeren en gebruiken
 
