@@ -1,15 +1,15 @@
 # Testplan
 
-Status: het volledige testplan is gepland. F00 heeft handmatig een MCP-proef via een echte client uitgevoerd; er zijn nog geen automatische tests.
+Status: het volledige testplan is gepland. F00 is handmatig met een echte MCP-client getest; F02 heeft automatische configuratie- en routetests. De F03-uitvoeringstests zijn nog niet geïmplementeerd.
 
 | Eisen | Bewijs |
 | --- | --- |
 | R01–R03 | Geldig bestand, onleesbaar bestand, kapotte JSON, duplicaten, ongeldige definities, registratie na herstart zonder rebuild |
-| R04–R06 | Succes, niet-nul exitcode, startfout, stdout/stderr tegelijk, timeout en aantoonbare procesbeëindiging |
-| R07 | Output boven grens, request boven grens, meer calls dan capaciteit; geheugen en wachttijd begrensd |
+| R04–R06 | Alleen geconfigureerde executable met vaste argumenten; succes, niet-nul exitcode, startfout, stdin gesloten, stdout/stderr tegelijk, timeout en aantoonbare procesboombeëindiging op Windows/Linux |
+| R07 | Gecombineerde stdout/stderr boven 1 MiB, requestbody boven 16 KiB, vijfde gelijktijdige call bij capaciteit vier; output en request worden begrensd en capaciteit wordt direct afgewezen |
 | R08–R10 | Verplichte/ontbrekende/verkeerde/onbekende parameters, optie-injectie, paden buiten root, symlinks |
 | R11/R16 | F00: handmatige `initialize`, listing/call met MCP Inspector CLI; aanvullende ongeldige protocolrequests en toepasselijke Origin/Host-controles blijven te verifiëren bij integratie |
-| R12/R13 | Routertests, foutmapping, requestcontext en geen gevoelige inhoud in logs |
+| R12/R13 | Routertests voor 400/404/413/502/503/504, niet-nul exitcode als HTTP 200, requestcontext en geen gevoelige inhoud in logs |
 | R14/R15 | Dezelfde kernscenario's op Windows en Linux; adapters gebruiken dezelfde kern |
 | R17 | Schone checkout met README starten; demo met succes, fout, logging en timeout |
 

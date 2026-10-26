@@ -1,6 +1,6 @@
 # API- en configuratiecontract
 
-Status: ontwerp voor F02. Alleen GET /status is geïmplementeerd.
+Status: `GET /status` en `GET /tools` zijn geïmplementeerd. Het uitvoeringscontract hieronder is vastgesteld voor F03; `POST /tools/{toolname}` is nog niet geïmplementeerd.
 
 ## HTTP
 
@@ -26,7 +26,19 @@ Beoogd uitvoeringsresultaat sluit aan op de opdracht:
 
 duration is milliseconden. exitCode kan null zijn wanneer het OS geen numerieke code levert. Een niet-nul exitcode is een afgeronde uitvoering met success=false; een uitvoeringsfout is een afzonderlijke foutcategorie.
 
-Leg foutcodes en HTTP-statusmapping vóór implementatie vast, inclusief timeout, outputlimiet en capaciteit.
+Voor F03 geldt deze foutmapping:
+
+| Situatie | HTTP-status | Gedrag |
+| --- | --- | --- |
+| Ongeldige JSON of ongeldige invoer | 400 | Geen proces starten |
+| Onbekende tool | 404 | Geen proces starten |
+| Requestbody groter dan 16 KiB | 413 | Request afwijzen vóór JSON-deserialisatie |
+| Capaciteit van vier uitvoeringen bereikt | 503 | Direct afwijzen, niet in een wachtrij plaatsen |
+| Timeout | 504 | Procesboom beëindigen |
+| Gecombineerde stdout/stderr groter dan 1 MiB | 502 | Procesboom beëindigen; geen afgekapt succesresultaat teruggeven |
+| Proces gestart met niet-nul exitcode | 200 | Normaal uitvoeringsresultaat met `success: false` en de exitcode |
+
+Een requestbody voor F03 is een JSON-object; gebruik `{}` voor een parameterloze tool. Toolparameters en placeholders worden pas in F04 uitgevoerd.
 
 ## Configuratie
 
@@ -44,11 +56,15 @@ De casus geeft richting en voorbeelden, maar legt niet alle randgevallen of limi
 - `timeout` is optioneel per tool en wordt uitgedrukt in milliseconden. Zonder deze instelling geldt een standaardtimeout van 10.000 ms (10 seconden). Een ingestelde timeout moet groter zijn dan 0 en mag maximaal 60.000 ms (60 seconden) zijn; grotere waarden worden afgewezen.
 - De configuratie blijft na startup onveranderlijk; een gewijzigde configuratie wordt actief na een herstart, niet via hot-reload.
 
-De beheerder stelt `command` en de vaste argumenten in; de server laat de client dit niet overschrijven. De beheerder kan dus een absoluut pad of een naam gebruiken die via de server-`PATH` wordt gevonden. Platformgeschikte paden en de toegestane executabletypen (waaronder eventueel Windows `.bat`/`.cmd`) moeten vóór procesuitvoering in F03 worden vastgelegd.
+De beheerder stelt `command` en de vaste argumenten in; de server laat de client dit niet overschrijven. De beheerder kan dus een absoluut pad of een naam gebruiken die via de server-`PATH` wordt gevonden. F03 start native executables. Een script mag alleen worden uitgevoerd wanneer de beheerder de interpreter expliciet als `command` configureert en het script als vast argument opgeeft. De server start niet automatisch een shell en dispatcht niet impliciet naar Windows `.bat`- of `.cmd`-bestanden.
 
 ### Uitvoeringsgrenzen voor F03
 
-F03 legt ook concrete grenzen vast voor uitvoer, requestgrootte en gelijktijdige uitvoering. Bij overschrijding van de outputlimiet moet de uitvoering worden beëindigd en als expliciete fout worden gemeld; afgekorte uitvoer mag niet op een normale succesvolle uitvoering lijken. De concrete grenswaarden moeten vóór implementatie van F03 worden vastgesteld.
+F03 hanteert maximaal 1 MiB gecombineerde stdout en stderr, maximaal 16 KiB requestbody en maximaal vier gelijktijdige uitvoeringen. Een volle capaciteit wordt direct afgewezen. Bij overschrijding van de outputlimiet wordt de procesboom beëindigd en als expliciete fout gemeld; afgekorte uitvoer mag niet op een normale succesvolle uitvoering lijken. De standaardtimeout blijft 10.000 ms; de configureerbare bovengrens blijft 60.000 ms.
+
+Het childproces erft de omgeving en werkdirectory van het serverproces. De client kan deze niet instellen. Beheer van de serveromgeving is daarom onderdeel van het vertrouwensbeleid; omgevingswaarden worden niet gelogd.
+
+Timeout, outputoverschrijding en annulering moeten de procesboom beëindigen op Windows en Linux. F03 onderzoekt en test platformgeschikte procesgroepen op Unix en Job Objects op Windows; dit is nog geen gerealiseerde of geverifieerde garantie.
 
 ## MCP
 

@@ -1,6 +1,6 @@
 # Architectuur
 
-Status: voorstel. Geïmplementeerd is alleen de statusroute met logging.
+Status: de statusroute, configuratielader, immutable registry en `GET /tools` zijn geïmplementeerd. De procesuitvoerder en MCP-adapter zijn nog niet geïmplementeerd; F03 werkt aan de procesuitvoerder.
 
 ## Beoogde gegevensstroom
 

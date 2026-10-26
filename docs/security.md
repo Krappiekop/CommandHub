@@ -1,6 +1,6 @@
 # Securityontwerp
 
-Status: ontwerp; maatregelen zijn nog niet gerealiseerd.
+Status: F02-configuratievalidatie is geïmplementeerd. De F03-uitvoeringsmaatregelen hieronder zijn ontwerpafspraken en worden tijdens F03 geïmplementeerd en getest.
 
 ## Vertrouwensgrenzen
 
@@ -9,8 +9,8 @@ De beheerder bepaalt configuratie en executables. Clientinvoer is onbetrouwbaar.
 ## Maatregelen per feature
 
 - F02: strikt configuratieschema, unieke namen, bekende placeholders, geldige limieten; geen configuratiewijziging via client.
-- F03: executable en argumenten gescheiden, geen shell; stdin sluiten; minimale uitvoeringsrechten; expliciet werkmap- en omgevingsbeleid.
-- F03: timeout, bounded output, capaciteitslimiet, annulering en procesopruiming. Procesboomgedrag per OS onderzoeken.
+- F03: executable en argumenten gescheiden; geen automatische shell-dispatch. Scripts zijn alleen toegestaan via een expliciet geconfigureerde interpreter met vaste scriptargumenten. Stdin sluiten. Het childproces erft de omgeving en werkdirectory van de server; de client kan deze niet wijzigen.
+- F03: timeout van maximaal 60 seconden (standaard 10 seconden), maximaal 1 MiB gecombineerde stdout/stderr, maximaal 16 KiB requestbody en maximaal vier gelijktijdige processen. Bij volle capaciteit direct afwijzen. Timeout, outputoverschrijding en annulering moeten de procesboom opruimen.
 - F04: typen, vereiste parameters, onbekende parameters en toegestane waarden controleren. Voorkom ook argument-/optie-injectie in de aangeroepen tool.
 - F04: paden normaliseren en controleren binnen toegestane roots; symlinks en niet-bestaande paden expliciet behandelen. Canonicalisatie alleen is geen volledige sandbox of oplossing voor races.
 - F05: gekozen MCP-transportbeveiliging volgen, waaronder toepasselijke Origin/Host-controles en lokale binding. Niet alle HTTP-clients sturen een Origin; volg de specificatie in plaats van een eigen browserregel.
@@ -18,10 +18,10 @@ De beheerder bepaalt configuratie en executables. Clientinvoer is onbetrouwbaar.
 
 ## Afspraken vóór uitvoering
 
-- Ondersteunde executabletypen, inclusief Windows .bat/.cmd: besluit nog nodig; geen willekeurige scripts toestaan.
-- Executablepaden en PATH-beleid: besluit nog nodig.
-- Timeout-, output-, request- en concurrentiegrenzen: meetbare waarden in configuratiecontract vastleggen.
-- Procesboomcontrole: keuze voor process groups / Windows Job Objects of expliciete beperkte scope onderbouwen.
+- Native executables en expliciet geconfigureerde interpreters zijn toegestaan; geen automatische `.bat`/`.cmd`- of shell-dispatch.
+- Executablepaden mogen absoluut zijn of via de geërfde server-`PATH` worden gevonden.
+- De timeout-, output-, request- en concurrentiegrenzen staan vast in het API-contract.
+- Procesboomcontrole wordt voor Windows en Linux onderzocht en getest met platformgeschikte mechanismen, waaronder Windows Job Objects en Unix process groups. De werking is nog niet geverifieerd.
 - Publieke hosting en authenticatie vallen buiten de eerste lokale demo.
 
 ## Bewijs

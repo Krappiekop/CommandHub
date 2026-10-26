@@ -4,11 +4,11 @@ CommandHub wordt een configuratiegestuurde MCP-server in Rust die externe comman
 
 ## Huidige status
 
-De hoofdapplicatie bevat `GET /status`, JSON-toolconfiguratie bij startup, een immutable toolregistry en `GET /tools` voor ontdekking. Procesuitvoering en MCP-integratie in de hoofdapplicatie zijn nog niet geïmplementeerd. De afzonderlijke F00-proef met MCP via HTTP is getest en staat klaar voor review; zie [de F00-notitie](notities/F00-mcp-proef.md). F02 staat ter review; zie [de actuele voortgang](docs/voortgang.md).
+De hoofdapplicatie bevat `GET /status`, JSON-toolconfiguratie bij startup, een immutable toolregistry en `GET /tools` voor ontdekking. F02 is gemerged. F03, de begrensde procesuitvoering via HTTP, is gestart maar nog niet geïmplementeerd. MCP-integratie in de hoofdapplicatie volgt later; de afzonderlijke F00-proef met MCP via HTTP staat klaar voor review. Zie [de actuele voortgang](docs/voortgang.md), [de F00-notitie](notities/F00-mcp-proef.md) en [de F03-notitie](notities/F03-procesuitvoering.md).
 
 ## Installeren en gebruiken
 
-Zie [START-HIER.md](START-HIER.md) voor installatie, Cargo-commando's en Git.
+Zie de instructies hieronder voor installatie en Cargo-commando's. De featurevolgorde en branchwerkwijze staan in [de roadmap](docs/roadmap.md).
 
 Benodigd: recente stabiele Rust-toolchain met ondersteuning voor editie 2024, Cargo en op Windows de MSVC-buildtools. Git is nodig voor versiebeheer.
 

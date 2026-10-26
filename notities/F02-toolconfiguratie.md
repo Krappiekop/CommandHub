@@ -76,7 +76,7 @@ Handmatig is bevestigd dat een dubbele toolnaam startup verhindert met de diagno
 
 ## Vervolg
 
-F02 is inhoudelijk gereed en staat ter review. Na review en merge kan de status Klaar worden. Voor F03 blijven toegestane executabletypen en uitvoeringsgrenzen open; zie het [featureplan](../docs/features/F02-toolconfiguratie.md).
+F02 is gemerged en staat op Klaar; de merge is op 2026-10-26 door de gebruiker bevestigd. De volgende implementatie is F03; zie het [featureplan](../docs/features/F03-procesuitvoering.md).
 
 ### 2026-10-23 — F02 afronden
 
@@ -84,3 +84,8 @@ F02 is inhoudelijk gereed en staat ter review. Na review en merge kan de status 
 - Bevestigd: een aangepaste toolconfiguratie wordt na herstart zichtbaar op `GET /tools`, zonder de executable opnieuw te bouwen.
 - Gecontroleerd: formatter, Clippy en 14 tests slagen op Windows.
 - Status: acceptatiecriteria aangetoond; feature staat ter review. Merge is nog niet uitgevoerd.
+
+### 2026-10-26 — Merge bevestigd
+
+- Bevestigd: gebruiker meldt dat F02 is gemerged; documentatiestatus bijgewerkt naar Klaar.
+- Vervolg: F03 is gestart; de uitvoeringsafspraken staan in het [F03-featureplan](../docs/features/F03-procesuitvoering.md).
