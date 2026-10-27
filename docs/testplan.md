@@ -1,19 +1,19 @@
 # Testplan
 
-Status: het volledige testplan is gepland. F00 is handmatig met een echte MCP-client getest; F02 heeft automatische configuratie- en routetests. Voor F03 zijn vijf unit tests voor toolselectie en outputlimiet geslaagd; procesintegratie en de overige uitvoeringsscenario's zijn nog niet getest.
+Status: het volledige testplan is gepland. F00 is handmatig met een echte MCP-client getest; F02 heeft automatische configuratie- en routetests. Voor F03 meldt de gebruiker dat gerichte tests slagen voor succes, niet-nul exitcode, timeout, outputoverschrijding door een childproces en capaciteitsvrijgave bij foutpaden. Volledige suite, procesboomopruiming met subprocessen, annulering, platformmatrix en HTTP-tests blijven open.
 
 | Eisen | Bewijs |
 | --- | --- |
 | R01–R03 | Geldig bestand, onleesbaar bestand, kapotte JSON, duplicaten, ongeldige definities, registratie na herstart zonder rebuild |
-| R04–R06 | Alleen geconfigureerde executable met vaste argumenten; succes, niet-nul exitcode, startfout, stdin gesloten, stdout/stderr tegelijk, timeout en aantoonbare procesboombeëindiging op Windows/Linux |
-| R07 | Gecombineerde stdout/stderr boven 1 MiB, requestbody boven 16 KiB, vijfde gelijktijdige call bij capaciteit vier; output en request worden begrensd en capaciteit wordt direct afgewezen |
+| R04–R06 | Alleen geconfigureerde executable met vaste argumenten; gerichte tests voor succes, niet-nul exitcode, startfout, gelijktijdig stdout/stderr en timeout zijn door gebruiker gemeld als geslaagd. Procesboombeëindiging bij subprocessen op Windows/Linux blijft te testen |
+| R07 | Gedeeld outputbudget voor streams en echte child-output boven 1 MiB, plus capaciteitsgrens/-vrijgave zijn gericht getest volgens gebruiker. Requestbody boven 16 KiB en vijfde gelijktijdige HTTP-call blijven te testen |
 | R08–R10 | Verplichte/ontbrekende/verkeerde/onbekende parameters, optie-injectie, paden buiten root, symlinks |
 | R11/R16 | F00: handmatige `initialize`, listing/call met MCP Inspector CLI; aanvullende ongeldige protocolrequests en toepasselijke Origin/Host-controles blijven te verifiëren bij integratie |
 | R12/R13 | Routertests voor 400/404/413/502/503/504, niet-nul exitcode als HTTP 200, requestcontext en geen gevoelige inhoud in logs |
 | R14/R15 | Dezelfde kernscenario's op Windows en Linux; adapters gebruiken dezelfde kern |
 | R17 | Schone checkout met README starten; demo met succes, fout, logging en timeout |
 
-Gebruik een klein zelfgeschreven testproces voor gecontroleerde vertraging, output en exitcodes, zodat tests niet onnodig van shellcommando's afhangen.
+Gebruik een klein zelfgeschreven testproces voor gecontroleerde vertraging, output, exitcodes en subprocessen, zodat tests niet onnodig van shellcommando's afhangen. De huidige outputlimiettest gebruikt de testbinary zelf als child; voeg voor procesboomverificatie een child toe die op zijn beurt een subprocess start.
 
 ## Controles
 

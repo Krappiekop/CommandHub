@@ -11,7 +11,7 @@ tags:
 
 ## Wat bouw ik en waarom?
 
-F03 voegt een gedeelde, begrensde procesuitvoerder en `POST /tools/{toolname}` toe voor geconfigureerde tools zonder dynamische parameters. Daarmee kan de server tools gecontroleerd uitvoeren zonder executablekeuze of shellopbouw vanuit clientinvoer. De eerste werkende bouwstenen voor processtart en begrensd gelijktijdig uitlezen zijn aanwezig en gericht getest. De volledige uitvoeringsmethode en HTTP-route bestaan nog niet. De actuele checklist staat in het [featureplan](../docs/features/F03-procesuitvoering.md).
+F03 voegt een gedeelde, begrensde procesuitvoerder en `POST /tools/{toolname}` toe voor geconfigureerde tools zonder dynamische parameters. Daarmee kan de server tools gecontroleerd uitvoeren zonder executablekeuze of shellopbouw vanuit clientinvoer. De eerste verticale slice in `ExecutionService::execute_parameterless` start een ingestelde parameterloze tool, leest stdout en stderr tegelijk binnen één budget, wacht op het proces en levert een `ExecutionResult`. Gerichte tests voor succes, niet-nul exitcode, timeout en outputoverschrijding door een childproces zijn volgens gebruiker geslaagd. Procesboomopruiming bij subprocessen, annulering en de HTTP-route bestaan nog niet. De actuele checklist staat in het [featureplan](../docs/features/F03-procesuitvoering.md).
 
 ## Hoe werkt de code?
 
@@ -19,9 +19,9 @@ In `src/execution.rs` beschrijft `ExecutionResult` een afgeronde run en ondersch
 
 `ExecutionService` houdt met `Arc<Semaphore>` een gedeelde capaciteit bij. `try_acquire_owned` wijst direct af wanneer de vier permits bezet zijn; een `OwnedSemaphorePermit` geeft de plek automatisch terug wanneer hij wordt gedropt. `create_command` bouwt een Tokio-`Command` met executable en argumenten apart en sluit stdin.
 
-`read_capped` leest een async stream in blokken van 8192 bytes. Een gedeelde semaphore bewaakt het gezamenlijke outputbudget; de permits blijven bij `CapturedOutput` bewaard zolang de bytes in het geheugen staan. `read_process_output` haalt de stdout- en stderr-pipes uit het childproces en gebruikt `tokio::try_join!` om ze tegelijk met hetzelfde budget te lezen. Bij een leesfout geeft de helper die fout terug; de helper coördineert zelf nog niet de volledige levenscyclus, timeout of procesboomopruiming.
+`read_capped` leest een async stream in blokken van 8192 bytes. Een gedeelde semaphore bewaakt het gezamenlijke outputbudget; de permits blijven bij `CapturedOutput` bewaard zolang de bytes in het geheugen staan. `read_process_output` haalt de stdout- en stderr-pipes uit het childproces en gebruikt `tokio::try_join!` om ze tegelijk met hetzelfde budget te lezen.
 
-`ExecutionService::start_process` reserveert een capaciteit-permit en start het proces met `create_command`. Als het starten mislukt, wordt de permit automatisch vrijgegeven. `kill_on_drop(true)` is ingesteld als vangnet voor het directe childproces; dit bewijst geen beëindiging van de volledige procesboom.
+`ExecutionService::start_process` reserveert een capaciteit-permit en start het proces met `create_command`. Als het starten mislukt, wordt de permit automatisch vrijgegeven. `execute_parameterless` gebruikt de tooltimeout (of standaard 10 seconden) rond gelijktijdig output lezen en wachten. Bij timeout of outputleesfout probeert `stop_child` het directe childproces te beëindigen; `kill_on_drop(true)` is daarnaast een vangnet. Deze mechanismen beëindigen niet noodzakelijk subprocessen.
 
 ## Keuzes en alternatieven
 
@@ -29,7 +29,8 @@ In `src/execution.rs` beschrijft `ExecutionResult` een afgeronde run en ondersch
 - Native executables zijn toegestaan. Scripts starten alleen via een expliciet geconfigureerde interpreter met vaste argumenten; geen automatische shell- of `.bat`/`.cmd`-dispatch.
 - Het childproces erft de omgeving en werkdirectory van de server. De client kan deze niet instellen.
 - Limieten: 10.000 ms standaardtimeout, maximaal 60.000 ms timeout, 1 MiB gecombineerde stdout/stderr, 16 KiB requestbody en vier gelijktijdige uitvoeringen. Volle capaciteit wordt direct afgewezen.
-- Timeout, outputoverschrijding en annulering moeten de procesboom op Windows en Linux beëindigen. Platformimplementatie en tests zijn nog open.
+- Timeout, outputoverschrijding en annulering moeten de volledige procesboom op Windows en Linux beëindigen. De huidige tests tonen timeout en outputoverschrijding voor een direct childproces aan, niet het opruimen van subprocessen.
+- De crate [`process-wrap`](https://docs.rs/process-wrap/) is onderzocht als kandidaat voor de platformafhandeling. De Tokio-API documenteert Unix `ProcessGroup` en Windows `JobObject` wrappers; `command-group` is de voorganger en wordt door de maintainers niet verder ontwikkeld. `process-wrap` is nog niet toegevoegd of geïntegreerd. Controleer de huidige API/features, MSRV-compatibiliteit (de geraadpleegde documentatie noemt Rust 1.87) en een echt procesboomscenario voor beide platforms voordat de keuze definitief is.
 - HTTP-foutmapping: 400 invoerfout, 404 onbekende tool, 413 request te groot, 503 capaciteit vol, 504 timeout, 502 outputlimiet. Een niet-nul exitcode geeft HTTP 200 met `success: false`.
 
 Deze afspraken staan ook in [API en configuratie](../docs/api-en-configuratie.md) en het [securityontwerp](../docs/security.md).
@@ -46,9 +47,12 @@ De gebruiker heeft de volgende gerichte tests op Windows uitgevoerd en gemeld da
 - `weigert_extra_uitvoering_bij_volledige_capaciteit`: een extra uitvoering wordt afgewezen wanneer alle permits bezet zijn.
 - `geeft_capaciteit_vrij_als_starten_mislukt`: capaciteit komt vrij na een startfout.
 - `start_proces_en_wacht_op_succesvolle_afloop`: `git --version` start, stdout en stderr worden met de helper tegelijk gelezen, en het proces eindigt succesvol.
+- `geeft_resultaat_bij_niet_succesvolle_exitcode`: een proces dat start maar met een niet-nul exitcode eindigt levert een `ExecutionResult` met `success: false` en stderr.
+- `geeft_timeout_als_proces_te_lang_duurt`: een langer draaiend direct childproces levert `TimedOut`; de test controleert daarna dat alle capaciteits-permits opnieuw beschikbaar zijn.
+- `stopt_proces_bij_outputoverschrijding`: een childproces schrijft meer dan het outputbudget; de executor geeft `OutputLimitExceeded` terug en capaciteit komt vrij.
 - `begrenz_stdout_en_stderr_met_een_gedeeld_budget`: twee streams delen aantoonbaar één outputbudget.
 
-Dit zijn gerichte tussentijdse controles, geen volledige verificatie van F03. De volledige formatter-, Clippy- en testcontroles zijn voor deze tussenstand niet gemeld. Timeout, outputoverschrijding door een echt proces, annulering en procesboomopruiming zijn nog niet getest.
+Dit zijn gerichte tussentijdse controles, geen volledige verificatie van F03. De volledige formatter-, Clippy- en testsuite zijn voor deze tussenstand niet gemeld. Annulering, procesboomopruiming met subprocessen en HTTP-integratie zijn nog niet getest. De directe-child timeout- en outputlimiettests bewijzen geen opruiming van een volledige procesboom.
 
 ## Werksessies
 
@@ -69,6 +73,15 @@ Dit zijn gerichte tussentijdse controles, geen volledige verificatie van F03. De
 - Werkwijze: eerst een kleine werkende verticale slice maken, die gericht verifiëren en daarna uitbreiden tot de acceptatiecriteria. Code in korte fragmenten aanbieden met bestand/plek en syntax-uitleg; de eigenaar typt zelf en bevestigt de testuitkomst. Documentatie alleen aanpassen op verzoek.
 - Open: resultaatcoördinatie, timeout, echte outputoverschrijding met opruiming, annulering, procesboomgedrag en HTTP-route. Zie ook de [projectbrede leerwerkwijze](../AGENTS.md#leerbegeleiding).
 
+### 2026-10-27 — Resultaat, timeout en outputlimiet
+
+- Doel: de verticale slice uitbreiden met een bruikbaar `ExecutionResult` en voorspelbare foutuitkomsten.
+- Gewijzigd: `execute_parameterless` coördineert toolselectie, start, gelijktijdig begrensd lezen, wachten en resultaatvorming. Timeout wordt uit de toolconfiguratie gelezen met 10 seconden als standaard. `stop_child` probeert bij timeout en leesfout het directe proces te beëindigen. Een test gebruikt de Rust-testbinary als child voor output boven de limiet.
+- Geleerd: een niet-nul exitcode is een normaal `ExecutionResult` met `success: false`, niet een processtartfout. Een gerichte test van outputoverschrijding moet aantonen dat de bedoelde childtest daadwerkelijk draait; een verkeerde `--exact`-filter resulteerde eerst in nul childtests en alleen output van het testharnas.
+- Gecontroleerd: de gebruiker meldt dat de tests voor succesvolle uitvoering, niet-nul exitcode, timeout (inclusief vrijgekomen capaciteit) en outputoverschrijding door een childproces (inclusief vrijgekomen capaciteit) slagen. Geen volledige Cargo-controles gemeld.
+- Procesbeheer: onderzocht is [`process-wrap`](https://docs.rs/process-wrap/), opvolger van `command-group`, met Tokio-ondersteuning, Unix `ProcessGroup` en Windows `JobObject`. De geraadpleegde documentatie noemt Rust 1.87 als MSRV en MIT/Apache-2.0 als licenties. De dependency is nog niet toegevoegd of geïntegreerd; MSRV en gedrag bij een subprocess moeten eerst worden gecontroleerd. De huidige code stopt alleen het directe childproces.
+- Open: bevestig cratekeuze na controle van API/features en MSRV; integreer procesboomopruiming en test met child én subprocess op Windows/Linux; werk annulering/shutdown af; daarna HTTP-route en integratietests.
+
 ## Vervolg
 
-Maak als volgende stap één kleine executor-methode die de bestaande onderdelen samenbrengt: parameterloze tool selecteren, proces starten, stdout en stderr gelijktijdig begrensd lezen, op het proces wachten en een `ExecutionResult` met uitvoer, exitcode, succes en duur teruggeven. Voeg een gerichte end-to-end unit test toe. Breid daarna de werkende slice uit met timeout, outputoverschrijding, annulering en procesopruiming, en sluit vervolgens de HTTP-route aan. Markeer niets als geverifieerd totdat de betreffende controle is uitgevoerd.
+Integreer na controle van crateversie, features en MSRV een platformbrede wrapper voor procesboomopruiming achter de bestaande uitvoeringsmethode. Voeg een gerichte test toe waarin het childproces zelf een subprocess start; verifieer dat beide worden beëindigd bij timeout én outputoverschrijding op Windows en Linux. Onderzoek daarna annulering/shutdown en sluit pas vervolgens de HTTP-route aan. Markeer niets als geverifieerd totdat de betreffende controle is uitgevoerd.

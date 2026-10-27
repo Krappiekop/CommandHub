@@ -25,7 +25,7 @@ Zie onderstaande taken. Nieuwe uitbreidingen krijgen een apart issue; vergroot d
 
 ## Werkaanpak
 
-Bouw F03 iteratief: begin met een kleine werkende verticale slice die een geconfigureerde parameterloze tool start, stdout en stderr gelijktijdig begrensd uitleest, op het proces wacht en een resultaat oplevert. Breid die slice daarna gecontroleerd uit met timeout, outputoverschrijding, annulering en procesopruiming, en sluit pas daarna de HTTP-route aan. Behoud de vastgestelde veiligheidsgrenzen in elke stap. Werk met korte codefragmenten met een exacte bestandslocatie en begrijpelijke uitleg; voer per stap een gerichte controle uit voordat de volgende stap begint. De algemene leerwerkwijze staat ook in de [README](../../README.md#werkwijze-voor-leerbegeleiding).
+Bouw F03 iteratief: begin met een kleine werkende verticale slice die een geconfigureerde parameterloze tool start, stdout en stderr gelijktijdig begrensd uitleest, op het proces wacht en een resultaat oplevert. Breid die slice daarna gecontroleerd uit met timeout, outputoverschrijding, annulering en procesopruiming, en sluit pas daarna de HTTP-route aan. Behoud de vastgestelde veiligheidsgrenzen in elke stap. Werk met korte codefragmenten met een exacte bestandslocatie en begrijpelijke uitleg; voer per stap een gerichte controle uit voordat de volgende stap begint. De algemene leerwerkwijze staat in [AGENTS.md](../../AGENTS.md#leerbegeleiding).
 
 ## Vastgestelde afspraken
 
@@ -35,16 +35,16 @@ Bouw F03 iteratief: begin met een kleine werkende verticale slice die een geconf
 - De standaardtimeout is 10.000 ms en het maximum 60.000 ms.
 - stdout en stderr worden samen begrensd op 1 MiB. Bij overschrijding wordt de procesboom beëindigd en volgt een expliciete fout.
 - Requestbody maximaal 16 KiB; maximaal vier gelijktijdige uitvoeringen. Bij volle capaciteit direct afwijzen.
-- Procesboomopruiming wordt voor Windows en Linux onderzocht en getest, met platformgeschikte procesgroepen/Windows Job Objects.
+- Procesboomopruiming wordt voor Windows en Linux onderzocht en getest. De kandidaat-crate is [`process-wrap`](https://docs.rs/process-wrap/): die biedt voor Tokio een Unix-procesgroepwrapper en een Windows Job Object-wrapper. De dependency is nog niet toegevoegd en de integratie/werking is nog niet geverifieerd; zie de F03-notitie.
 - HTTP-mapping: 400 invoerfout, 404 onbekende tool, 413 te grote requestbody, 503 volle capaciteit, 504 timeout, 502 outputlimiet. Een proces met niet-nul exitcode geeft HTTP 200 met `success: false`.
 
 ## Todo
 
 - [x] Gedeelde kernresultaten en fouttypen definiëren.
 - [x] Command-opbouw met geconfigureerde executable, losse vaste argumenten, gesloten stdin en gepipete stdout/stderr voorbereiden.
-- [ ] Executor maken en de procesuitvoering integreren met het vastgestelde omgevingsbeleid.
+- [x] Basisexecutor voor parameterloze tools maken; executable en vaste argumenten komen uit de beheerdersconfiguratie en de serveromgeving/werkdirectory worden geërfd. Procesboomopruiming en annulering blijven open.
 - [x] Semaphore voor maximaal vier gelijktijdige uitvoeringen en een helper voor de gecombineerde outputlimiet toevoegen.
-- [ ] Timeout, outputlimiet en concurrentielimiet implementeren.
+- [x] Timeout, outputlimiet en concurrentielimiet implementeren voor de directe child; volledige procesboomopruiming blijft open.
 - [ ] Annulering, shutdown en procesboomgedrag onderzoeken en implementeren volgens gekozen scope.
 - [ ] POST /tools/{toolname} voor tools zonder dynamische parameters aansluiten.
 - [ ] Testproces maken voor duur, stdout/stderr, exitcode en subprocessen.
@@ -62,7 +62,7 @@ Bouw F03 iteratief: begin met een kleine werkende verticale slice die een geconf
 - GitHub issue: nog vast te leggen.
 - Branch: feature/F03-procesuitvoering.
 - Pull request: nog niet aangemaakt.
-- Tests/handmatige verificatie: de oorspronkelijke vijf gerichte tests en aanvullende tests voor capaciteit, mislukte start, succesvolle Git-processtart, outputlezing en het gedeelde outputbudget zijn volgens gebruiker geslaagd. Zie de [F03-notitie](../../notities/F03-procesuitvoering.md). De volledige executor, timeout, procesopruiming en HTTP-integratie zijn nog niet getest.
+- Tests/handmatige verificatie: de gebruiker meldt dat gerichte tests voor succesvolle en niet-succesvolle uitvoering, timeout, outputoverschrijding door een childproces en vrijgave van capaciteit na fouten slagen. Platformbrede procesboomopruiming, de volledige suite en HTTP-integratie zijn nog niet geverifieerd. Zie de [F03-notitie](../../notities/F03-procesuitvoering.md).
 - [Featurenotitie](../../notities/F03-procesuitvoering.md).
 
 ## Afronden

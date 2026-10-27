@@ -64,7 +64,7 @@ F03 hanteert maximaal 1 MiB gecombineerde stdout en stderr, maximaal 16 KiB requ
 
 Het childproces erft de omgeving en werkdirectory van het serverproces. De client kan deze niet instellen. Beheer van de serveromgeving is daarom onderdeel van het vertrouwensbeleid; omgevingswaarden worden niet gelogd.
 
-Timeout, outputoverschrijding en annulering moeten de procesboom beëindigen op Windows en Linux. F03 onderzoekt en test platformgeschikte procesgroepen op Unix en Job Objects op Windows; dit is nog geen gerealiseerde of geverifieerde garantie.
+Timeout en outputoverschrijding worden in de huidige F03-uitvoermethode op een echt childproces afgehandeld; de gebruiker meldt dat de gerichte tests hiervoor slagen. De huidige opruiming beëindigt het directe childproces. Procesboomopruiming bij subprocessen en annulering zijn nog niet gerealiseerd of geverifieerd. [`process-wrap`](https://docs.rs/process-wrap/) is onderzocht als kandidaat: het biedt een Tokio-wrapper voor Unix-procesgroepen en Windows Job Objects, maar is nog niet aan de dependencies toegevoegd. Pas na integratie en tests op Windows en Linux mag procesboomopruiming als garantie worden behandeld.
 
 ## MCP
 

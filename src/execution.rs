@@ -1,4 +1,9 @@
-use std::{io, process::Stdio, sync::Arc, time::Duration};
+use std::{
+    io,
+    process::Stdio,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -28,6 +33,7 @@ pub enum ExecutionError {
     ProcessStartFailed(io::Error),
     OutputReadFailed(io::Error),
     ProcessWaitFailed(io::Error),
+    ProcessKillFailed(io::Error),
 }
 
 const MAX_CONCURRENT_EXECUTIONS: usize = 4;
@@ -66,6 +72,49 @@ impl ExecutionService {
             .map_err(ExecutionError::ProcessStartFailed)?;
 
         Ok((child, permit))
+    }
+
+    pub(crate) async fn execute_parameterless(
+        &self,
+        registry: &ToolRegistry,
+        name: &str,
+    ) -> Result<ExecutionResult, ExecutionError> {
+        let tool = find_parameterless_tool(registry, name)?;
+        let started_at = Instant::now();
+        let (mut child, _permit) = self.start_process(tool)?;
+
+        let timeout = Duration::from_millis(tool.timeout.unwrap_or(10_000));
+        let budget = Arc::new(Semaphore::new(MAX_OUTPUT_BYTES));
+
+        let uitvoering = async {
+            let (stdout, stderr) = read_process_output(&mut child, budget).await?;
+            let status = child
+                .wait()
+                .await
+                .map_err(ExecutionError::ProcessWaitFailed)?;
+
+            Ok::<_, ExecutionError>((stdout, stderr, status))
+        };
+
+        let (stdout, stderr, status) = match tokio::time::timeout(timeout, uitvoering).await {
+            Ok(Ok(resultaat)) => resultaat,
+            Ok(Err(fout)) => {
+                stop_child(&mut child).await?;
+                return Err(fout);
+            }
+            Err(_) => {
+                stop_child(&mut child).await?;
+                return Err(ExecutionError::TimedOut);
+            }
+        };
+
+        Ok(ExecutionResult {
+            success: status.success(),
+            stdout: String::from_utf8_lossy(&stdout.bytes).into_owned(),
+            stderr: String::from_utf8_lossy(&stderr.bytes).into_owned(),
+            exit_code: status.code(),
+            duration: started_at.elapsed(),
+        })
     }
 }
 
@@ -157,6 +206,21 @@ async fn read_process_output(
     )
 }
 
+async fn stop_child(child: &mut tokio::process::Child) -> Result<(), ExecutionError> {
+    let status = child
+        .try_wait()
+        .map_err(ExecutionError::ProcessWaitFailed)?;
+
+    if status.is_none() {
+        child
+            .kill()
+            .await
+            .map_err(ExecutionError::ProcessKillFailed)?;
+    }
+
+    Ok(())
+}
+
 impl std::fmt::Display for ExecutionError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -171,6 +235,7 @@ impl std::fmt::Display for ExecutionError {
             Self::ProcessStartFailed(_) => write!(formatter, "Proces starten mislukt"),
             Self::OutputReadFailed(_) => write!(formatter, "Procesuitvoer lezen mislukt"),
             Self::ProcessWaitFailed(_) => write!(formatter, "Wachten op proces mislukt"),
+            Self::ProcessKillFailed(_) => write!(formatter, "Proces beëindigen mislukt"),
         }
     }
 }
@@ -180,6 +245,7 @@ impl std::error::Error for ExecutionError {
         match self {
             Self::ProcessStartFailed(error)
             | Self::OutputReadFailed(error)
+            | Self::ProcessWaitFailed(error)
             | Self::ProcessWaitFailed(error) => Some(error),
             _ => None,
         }
@@ -188,6 +254,8 @@ impl std::error::Error for ExecutionError {
 
 #[cfg(test)]
 mod tests {
+    use serde::de::Unexpected::Bytes;
+
     use super::*;
     use crate::config::{ConfigFile, ParameterDefinition, ParameterType};
 
@@ -288,27 +356,123 @@ mod tests {
     async fn start_proces_en_wacht_op_succesvolle_afloop() {
         let service = ExecutionService::new();
         let registry = test_registry(Vec::new());
-        let tool = find_parameterless_tool(&registry, "git_versie")
-            .expect("de git-testtool moet gevonden worden");
 
-        let (mut child, _permit) = service
-            .start_process(tool)
-            .expect("git moet gestart kunnen worden");
-
-        let budget = Arc::new(Semaphore::new(MAX_OUTPUT_BYTES));
-        let (stdout_output, _stderr_output) =
-            read_process_output(&mut child, budget)
-                .await
-                .expect("stdout en stderr moeten binnen het gedeelde budget gelezen worden");
-
-        assert!(!stdout_output.bytes.is_empty());
-
-        let status = child
-            .wait()
+        let resultaat = service
+            .execute_parameterless(&registry, "git_versie")
             .await
-            .expect("er moet op het proces gewacht kunnen worden");
+            .expect("de git-testtool moet succesvol uitgevoerd worden");
 
-        assert!(status.success());
+        assert!(resultaat.success);
+        assert_eq!(resultaat.exit_code, Some(0));
+        assert!(!resultaat.stdout.is_empty());
+        assert!(resultaat.stderr.is_empty());
+    }
+
+    #[tokio::test]
+    async fn geeft_resultaat_bij_niet_succesvolle_exitcode() {
+        let config = ConfigFile {
+            tools: vec![ToolDefinition {
+                name: "git_fout".to_owned(),
+                description: "Test een niet-succesvolle exitcode".to_owned(),
+                command: "git".to_owned(),
+                arguments: vec!["--invalid-commandhub-test".to_owned()],
+                parameters: Vec::new(),
+                timeout: None,
+            }],
+        };
+        let registry = ToolRegistry::new(config);
+        let service = ExecutionService::new();
+
+        let resultaat = service
+            .execute_parameterless(&registry, "git_fout")
+            .await
+            .expect("een proces met een foutieve exitcode moet een resultaat geven");
+
+        assert!(!resultaat.success);
+        assert!(matches!(resultaat.exit_code, Some(code) if code != 0));
+        assert!(!resultaat.stderr.is_empty());
+    }
+
+    #[cfg(any(windows, unix))]
+    #[tokio::test]
+    async fn geeft_timeout_als_proces_te_lang_duurt() {
+        #[cfg(windows)]
+        let (command, arguments) = (
+            "ping",
+            vec!["-n".to_owned(), "5".to_owned(), "127.0.0.1".to_owned()],
+        );
+
+        #[cfg(unix)]
+        let (command, arguments) = ("sleep", vec!["5".to_owned()]);
+
+        let config = ConfigFile {
+            tools: vec![ToolDefinition {
+                name: "langzaam".to_owned(),
+                description: "Test de proces-timeout".to_owned(),
+                command: command.to_owned(),
+                arguments,
+                parameters: Vec::new(),
+                timeout: Some(100),
+            }],
+        };
+        let registry = ToolRegistry::new(config);
+        let service = ExecutionService::new();
+
+        let resultaat = service.execute_parameterless(&registry, "langzaam").await;
+
+        assert!(
+            matches!(resultaat, Err(ExecutionError::TimedOut)),
+            "verwachtte een timeout, kreeg: {resultaat:?}"
+        );
+
+        let _permits: Vec<_> = (0..MAX_CONCURRENT_EXECUTIONS)
+            .map(|_| {
+                service
+                    .try_acquire()
+                    .expect("capaciteit moet na een timeout weer vrij zijn")
+            })
+            .collect();
+    }
+
+    #[tokio::test]
+    async fn stopt_proces_bij_outputoverschrijding() {
+        let testprogramma = std::env::current_exe()
+            .expect("het pad naar het huidige testprogramma moet beschikbaar zijn");
+
+        let config = ConfigFile {
+            tools: vec![ToolDefinition {
+                name: "grote_output".to_owned(),
+                description: "Test het stoppen bij te grote uitvoer".to_owned(),
+                command: testprogramma.to_string_lossy().into_owned(),
+                arguments: vec![
+                    "--exact".to_owned(),
+                    "execution::tests::schrijft_output_boven_de_limiet".to_owned(),
+                    "--ignored".to_owned(),
+                    "--nocapture".to_owned(),
+                ],
+                parameters: Vec::new(),
+                timeout: Some(10_000),
+            }],
+        };
+        let registry = ToolRegistry::new(config);
+        let service = ExecutionService::new();
+
+        let resultaat = service
+            .execute_parameterless(&registry, "grote_output")
+            .await;
+
+        assert!(
+            matches!(resultaat, Err(ExecutionError::OutputLimitExceeded)),
+            "verwachtte een outputlimietfout, kreeg: {resultaat:?}"
+        );
+
+        let _permits: Vec<_> = (0..MAX_CONCURRENT_EXECUTIONS)
+            .map(|_| {
+                service
+                    .try_acquire()
+                    .expect("capaciteit moet na outputoverschrijding vrij zijn")
+            })
+            .collect();
     }
 
     #[tokio::test]
@@ -372,5 +536,17 @@ mod tests {
             resultaat,
             Err(ExecutionError::OutputLimitExceeded)
         ));
+    }
+
+    #[test]
+    #[ignore]
+    fn schrijft_output_boven_de_limiet() {
+        use std::io::Write;
+
+        let bytes = vec![b'x'; MAX_OUTPUT_BYTES + 1];
+        std::io::stdout()
+            .lock()
+            .write_all(&bytes)
+            .expect("de testuitvoer moet geschreven worden");
     }
 }
