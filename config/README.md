@@ -48,4 +48,4 @@ De client kan `command` of vaste argumenten niet wijzigen. F03 voert alleen tool
 
 F03 staat native executables en expliciet geconfigureerde interpreters toe. Voor een script configureert de beheerder de interpreter als `command` en het script als vast argument. De server start niet automatisch een shell en dispatcht niet impliciet naar Windows `.bat`- of `.cmd`-bestanden. Het childproces erft de omgeving en werkdirectory van de server.
 
-De F03-grenzen zijn maximaal 1 MiB gecombineerde stdout/stderr, 16 KiB requestbody en vier gelijktijdige uitvoeringen. Een volle capaciteit wordt direct afgewezen. Deze uitvoeringsafspraken zijn vastgesteld; de uitvoering ervan is nog in ontwikkeling.
+De F03-grenzen zijn maximaal 1 MiB gecombineerde stdout/stderr, 16 KiB requestbody en vier gelijktijdige uitvoeringen. Een volle capaciteit wordt direct afgewezen. De executor en process-wrap-platformwrappers zijn geïmplementeerd; HTTP-requestlimitering, procesboomtests met subprocessen en de uitvoeringsroute zijn nog niet gereed.

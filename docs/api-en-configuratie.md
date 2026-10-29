@@ -64,7 +64,7 @@ F03 hanteert maximaal 1 MiB gecombineerde stdout en stderr, maximaal 16 KiB requ
 
 Het childproces erft de omgeving en werkdirectory van het serverproces. De client kan deze niet instellen. Beheer van de serveromgeving is daarom onderdeel van het vertrouwensbeleid; omgevingswaarden worden niet gelogd.
 
-Timeout en outputoverschrijding worden in de huidige F03-uitvoermethode op een echt childproces afgehandeld; de gebruiker meldt dat de gerichte tests hiervoor slagen. De huidige opruiming beëindigt het directe childproces. Procesboomopruiming bij subprocessen en annulering zijn nog niet gerealiseerd of geverifieerd. [`process-wrap`](https://docs.rs/process-wrap/) is onderzocht als kandidaat: het biedt een Tokio-wrapper voor Unix-procesgroepen en Windows Job Objects, maar is nog niet aan de dependencies toegevoegd. Pas na integratie en tests op Windows en Linux mag procesboomopruiming als garantie worden behandeld.
+Timeout en outputoverschrijding worden in de huidige F03-uitvoermethode afgehandeld; de gebruiker meldt dat de gerichte tests hiervoor slagen. [`process-wrap`](https://docs.rs/process-wrap/) 10.0.1 met feature `tokio1` is geïntegreerd: Unix `ProcessGroup`, Windows `JobObject` en `KillOnDrop`. De wrapper-smoketest toont starten en wachten, maar procesboomopruiming van subprocessen is nog niet getest of gegarandeerd. Annulering en HTTP-integratie zijn eveneens nog open.
 
 ## MCP
 

@@ -11,7 +11,7 @@ tags:
 
 ## Wat bouw ik en waarom?
 
-F03 voegt een gedeelde, begrensde procesuitvoerder en `POST /tools/{toolname}` toe voor geconfigureerde tools zonder dynamische parameters. Daarmee kan de server tools gecontroleerd uitvoeren zonder executablekeuze of shellopbouw vanuit clientinvoer. De eerste verticale slice in `ExecutionService::execute_parameterless` start een ingestelde parameterloze tool, leest stdout en stderr tegelijk binnen één budget, wacht op het proces en levert een `ExecutionResult`. Gerichte tests voor succes, niet-nul exitcode, timeout en outputoverschrijding door een childproces zijn volgens gebruiker geslaagd. Procesboomopruiming bij subprocessen, annulering en de HTTP-route bestaan nog niet. De actuele checklist staat in het [featureplan](../docs/features/F03-procesuitvoering.md).
+F03 voegt een gedeelde, begrensde procesuitvoerder en `POST /tools/{toolname}` toe voor geconfigureerde tools zonder dynamische parameters. `ExecutionService::execute_parameterless` start een ingestelde tool, leest stdout en stderr tegelijk binnen één budget, wacht op het proces en levert een `ExecutionResult`. `process-wrap` 10.0.1 is geïntegreerd: Unix gebruikt `ProcessGroup`, Windows `JobObject` en beide gebruiken `KillOnDrop`. De gebruiker meldt dat de wrapper-smoketest en de gerichte executietests slagen. De HTTP-route ontbreekt nog; opruiming van een volledige boom met subprocessen en annulering zijn nog niet bewezen. De actuele checklist staat in het [featureplan](../docs/features/F03-procesuitvoering.md).
 
 ## Hoe werkt de code?
 
@@ -21,7 +21,7 @@ In `src/execution.rs` beschrijft `ExecutionResult` een afgeronde run en ondersch
 
 `read_capped` leest een async stream in blokken van 8192 bytes. Een gedeelde semaphore bewaakt het gezamenlijke outputbudget; de permits blijven bij `CapturedOutput` bewaard zolang de bytes in het geheugen staan. `read_process_output` haalt de stdout- en stderr-pipes uit het childproces en gebruikt `tokio::try_join!` om ze tegelijk met hetzelfde budget te lezen.
 
-`ExecutionService::start_process` reserveert een capaciteit-permit en start het proces met `create_command`. Als het starten mislukt, wordt de permit automatisch vrijgegeven. `execute_parameterless` gebruikt de tooltimeout (of standaard 10 seconden) rond gelijktijdig output lezen en wachten. Bij timeout of outputleesfout probeert `stop_child` het directe childproces te beëindigen; `kill_on_drop(true)` is daarnaast een vangnet. Deze mechanismen beëindigen niet noodzakelijk subprocessen.
+`ExecutionService::start_process` reserveert een capaciteit-permit en start het proces met `create_wrapped_command`. De wrapper geeft `Box<dyn ChildWrapper>` terug; via die trait leest de executor de pipes en wacht of beëindigt hij het proces. Als starten mislukt, wordt de permit automatisch vrijgegeven. Bij timeout of outputleesfout roept `stop_child` `kill()` van de wrapper aan. De platformwrappers zijn aangesloten, maar gedrag met een child die zelf subprocessen start moet nog op Windows en Linux worden getest.
 
 ## Keuzes en alternatieven
 
@@ -30,7 +30,8 @@ In `src/execution.rs` beschrijft `ExecutionResult` een afgeronde run en ondersch
 - Het childproces erft de omgeving en werkdirectory van de server. De client kan deze niet instellen.
 - Limieten: 10.000 ms standaardtimeout, maximaal 60.000 ms timeout, 1 MiB gecombineerde stdout/stderr, 16 KiB requestbody en vier gelijktijdige uitvoeringen. Volle capaciteit wordt direct afgewezen.
 - Timeout, outputoverschrijding en annulering moeten de volledige procesboom op Windows en Linux beëindigen. De huidige tests tonen timeout en outputoverschrijding voor een direct childproces aan, niet het opruimen van subprocessen.
-- De crate [`process-wrap`](https://docs.rs/process-wrap/) is onderzocht als kandidaat voor de platformafhandeling. De Tokio-API documenteert Unix `ProcessGroup` en Windows `JobObject` wrappers; `command-group` is de voorganger en wordt door de maintainers niet verder ontwikkeld. `process-wrap` is nog niet toegevoegd of geïntegreerd. Controleer de huidige API/features, MSRV-compatibiliteit (de geraadpleegde documentatie noemt Rust 1.87) en een echt procesboomscenario voor beide platforms voordat de keuze definitief is.
+- [`process-wrap`](https://docs.rs/process-wrap/) 10.0.1 is toegevoegd met feature `tokio1`; de MSRV 1.87 is lager dan de gebruikte Rust 1.99.1. De code gebruikt Unix `ProcessGroup`, Windows `JobObject` en `KillOnDrop`. De wrapper-smoketest slaagt, maar bewijst niet dat een volledige procesboom bij timeout/outputoverschrijding wordt beëindigd. Test dit op Windows en Linux.
+- Aandachtspunt: `stop_child` haalt de status op met `try_wait()`, maar de huidige code gebruikt die status niet voordat `kill()` wordt aangeroepen. Controleer dat een al beëindigd proces geen fout oplevert die de oorspronkelijke timeout-/outputfout maskeert.
 - HTTP-foutmapping: 400 invoerfout, 404 onbekende tool, 413 request te groot, 503 capaciteit vol, 504 timeout, 502 outputlimiet. Een niet-nul exitcode geeft HTTP 200 met `success: false`.
 
 Deze afspraken staan ook in [API en configuratie](../docs/api-en-configuratie.md) en het [securityontwerp](../docs/security.md).
@@ -51,8 +52,9 @@ De gebruiker heeft de volgende gerichte tests op Windows uitgevoerd en gemeld da
 - `geeft_timeout_als_proces_te_lang_duurt`: een langer draaiend direct childproces levert `TimedOut`; de test controleert daarna dat alle capaciteits-permits opnieuw beschikbaar zijn.
 - `stopt_proces_bij_outputoverschrijding`: een childproces schrijft meer dan het outputbudget; de executor geeft `OutputLimitExceeded` terug en capaciteit komt vrij.
 - `begrenz_stdout_en_stderr_met_een_gedeeld_budget`: twee streams delen aantoonbaar één outputbudget.
+- `start_met_platformwrapper_en_wacht_op_succes`: start `git --version` via `process-wrap` en wacht op succesvolle afloop.
 
-Dit zijn gerichte tussentijdse controles, geen volledige verificatie van F03. De volledige formatter-, Clippy- en testsuite zijn voor deze tussenstand niet gemeld. Annulering, procesboomopruiming met subprocessen en HTTP-integratie zijn nog niet getest. De directe-child timeout- en outputlimiettests bewijzen geen opruiming van een volledige procesboom.
+De gebruiker meldt dat `cargo test --locked execution::tests` op 2026-10-29 slaagt: 13 passed, 1 ignored, 14 filtered. Dit zijn gerichte tussentijdse controles, geen volledige verificatie van F03. De formatter-, Clippy- en volledige testsuite zijn niet gemeld. De wrapper-smoketest bevestigt alleen starten en wachten; opruiming van een child met eigen subprocessen is niet getest. Annulering, HTTP-integratie, requestlimiet en Linux-verificatie blijven open.
 
 ## Werksessies
 
@@ -82,6 +84,14 @@ Dit zijn gerichte tussentijdse controles, geen volledige verificatie van F03. De
 - Procesbeheer: onderzocht is [`process-wrap`](https://docs.rs/process-wrap/), opvolger van `command-group`, met Tokio-ondersteuning, Unix `ProcessGroup` en Windows `JobObject`. De geraadpleegde documentatie noemt Rust 1.87 als MSRV en MIT/Apache-2.0 als licenties. De dependency is nog niet toegevoegd of geïntegreerd; MSRV en gedrag bij een subprocess moeten eerst worden gecontroleerd. De huidige code stopt alleen het directe childproces.
 - Open: bevestig cratekeuze na controle van API/features en MSRV; integreer procesboomopruiming en test met child én subprocess op Windows/Linux; werk annulering/shutdown af; daarna HTTP-route en integratietests.
 
+### 2026-10-29 — Platformwrapper aangesloten
+
+- Doel: de bestaande executor via `process-wrap` laten starten en beheren.
+- Gewijzigd: dependency `process-wrap` 10.0.1 met feature `tokio1`; Unix gebruikt `ProcessGroup::leader()`, Windows `JobObject`, en `KillOnDrop` is toegevoegd. `start_process`, outputlezen, wachten en `stop_child` gebruiken `ChildWrapper`.
+- Gecontroleerd: de gebruiker meldt dat `cargo test --locked execution::tests` slaagt met 13 passed, 1 ignored en 14 filtered. De wrapper-smoketest start `git --version` en wacht op succes.
+- Beperking: de smoke-test bewijst geen beëindiging van subprocessen; de test is niet op beide platforms aangetoond. Volledige formatter-, Clippy- en testsuitecontroles zijn niet gemeld.
+- Open: controleren van de `try_wait()`-afhandeling in `stop_child`; een proces met eigen subprocess testen bij timeout/outputoverschrijding op Windows en Linux; daarna annulering/shutdown en HTTP-route.
+
 ## Vervolg
 
-Integreer na controle van crateversie, features en MSRV een platformbrede wrapper voor procesboomopruiming achter de bestaande uitvoeringsmethode. Voeg een gerichte test toe waarin het childproces zelf een subprocess start; verifieer dat beide worden beëindigd bij timeout én outputoverschrijding op Windows en Linux. Onderzoek daarna annulering/shutdown en sluit pas vervolgens de HTTP-route aan. Markeer niets als geverifieerd totdat de betreffende controle is uitgevoerd.
+De wrapper is geïntegreerd en de smoke-test slaagt. Controleer eerst de statusafhandeling in `stop_child`. Voeg daarna een gerichte test toe waarin het childproces zelf een subprocess start; verifieer dat beide worden beëindigd bij timeout én outputoverschrijding op Windows en Linux. Onderzoek daarna annulering/shutdown en sluit pas vervolgens de HTTP-route aan. Markeer niets als geverifieerd totdat de betreffende controle is uitgevoerd.

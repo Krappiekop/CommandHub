@@ -1,6 +1,6 @@
 # Architectuur
 
-Status: de statusroute, configuratielader, immutable registry en `GET /tools` zijn geïmplementeerd. F03 bevat een executor voor parameterloze tools met begrensde output en timeout, maar platformbrede procesboomopruiming en de HTTP-uitvoerroute zijn nog open. `process-wrap` is onderzocht als kandidaat voor Unix-procesgroepen en Windows Job Objects; de crate is nog niet toegevoegd of geïntegreerd. De MCP-adapter is nog niet in de hoofdapplicatie geïmplementeerd.
+Status: de statusroute, configuratielader, immutable registry en `GET /tools` zijn geïmplementeerd. F03 bevat een executor voor parameterloze tools met begrensde output en timeout. `process-wrap` 10.0.1 is geïntegreerd met Unix `ProcessGroup`, Windows `JobObject` en `KillOnDrop`; procesboomgedrag met subprocessen is nog niet geverifieerd. De HTTP-uitvoerroute en MCP-adapter zijn nog niet in de hoofdapplicatie geïmplementeerd.
 
 ## Beoogde gegevensstroom
 
@@ -18,7 +18,7 @@ Bij het starten: configuratie laden → configuratie valideren → registry bouw
 | Registry | Gevalideerde tooldefinities op naam beschikbaar maken |
 | Config loader | JSON lezen en controleren; ongeldige configuratie stopt startup |
 | Validation | Parameters en uitvoeringsbeleid controleren |
-| Process executor | Proces, uitvoer, tijdslimiet, capaciteit en opruimen beheren; F03 implementeert de normale uitvoering en directe-child-timeout/outputfoutafhandeling, platformbrede boomopruiming blijft open |
+| Process executor | Proces, uitvoer, tijdslimiet, capaciteit en opruimen beheren; F03 implementeert uitvoering met platformwrappers, maar opruiming van subprocessen moet nog worden getest |
 | Logging | Context, uitkomst en duur vastleggen zonder gevoelige inhoud |
 
 ## Structuur groeit met de features
@@ -37,4 +37,4 @@ Maak onderscheid tussen ongeldige invoer, onbekende tool, capaciteitsgebrek, sta
 
 ## Platformbeleid
 
-Cross-platform code betekent niet dat elke executable op ieder OS bestaat. Lever platformgeschikte configuratievoorbeelden. Leg procesboom- en afsluitgedrag per OS vast en toets dit expliciet. De kandidaat [`process-wrap`](https://docs.rs/process-wrap/) heeft een Tokio-API met Unix `ProcessGroup` en Windows `JobObject` wrappers. Houd de platformkeuze afgebakend en test op beide platforms een proces dat zelf een subprocess start; de crate is nog niet geïntegreerd en is geen bewijs van correcte opruiming.
+Cross-platform code betekent niet dat elke executable op ieder OS bestaat. Lever platformgeschikte configuratievoorbeelden. Leg procesboom- en afsluitgedrag per OS vast en toets dit expliciet. [`process-wrap`](https://docs.rs/process-wrap/) 10.0.1 is geïntegreerd met Tokio `ProcessGroup` op Unix en `JobObject` op Windows. De smoke-test bewijst starten en wachten, niet het beëindigen van subprocessen; test daarom op beide platforms een proces dat zelf een subprocess start.

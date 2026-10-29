@@ -1,11 +1,11 @@
 # Testplan
 
-Status: het volledige testplan is gepland. F00 is handmatig met een echte MCP-client getest; F02 heeft automatische configuratie- en routetests. Voor F03 meldt de gebruiker dat gerichte tests slagen voor succes, niet-nul exitcode, timeout, outputoverschrijding door een childproces en capaciteitsvrijgave bij foutpaden. Volledige suite, procesboomopruiming met subprocessen, annulering, platformmatrix en HTTP-tests blijven open.
+Status: het volledige testplan is gepland. F00 is handmatig met een echte MCP-client getest; F02 heeft automatische configuratie- en routetests. Voor F03 meldt de gebruiker dat de gerichte suite 13 tests laat slagen en 1 test negeert. De process-wrap-smoketest toont starten en wachten; procesboomopruiming met subprocessen, annulering, platformmatrix, HTTP-tests en volledige Cargo-controles blijven open.
 
 | Eisen | Bewijs |
 | --- | --- |
 | R01–R03 | Geldig bestand, onleesbaar bestand, kapotte JSON, duplicaten, ongeldige definities, registratie na herstart zonder rebuild |
-| R04–R06 | Alleen geconfigureerde executable met vaste argumenten; gerichte tests voor succes, niet-nul exitcode, startfout, gelijktijdig stdout/stderr en timeout zijn door gebruiker gemeld als geslaagd. Procesboombeëindiging bij subprocessen op Windows/Linux blijft te testen |
+| R04–R06 | Alleen geconfigureerde executable met vaste argumenten; gerichte tests voor succes, niet-nul exitcode, startfout, gelijktijdig stdout/stderr, timeout en process-wrap-smoketest zijn door gebruiker gemeld als geslaagd. Procesboombeëindiging bij subprocessen op Windows/Linux blijft te testen |
 | R07 | Gedeeld outputbudget voor streams en echte child-output boven 1 MiB, plus capaciteitsgrens/-vrijgave zijn gericht getest volgens gebruiker. Requestbody boven 16 KiB en vijfde gelijktijdige HTTP-call blijven te testen |
 | R08–R10 | Verplichte/ontbrekende/verkeerde/onbekende parameters, optie-injectie, paden buiten root, symlinks |
 | R11/R16 | F00: handmatige `initialize`, listing/call met MCP Inspector CLI; aanvullende ongeldige protocolrequests en toepasselijke Origin/Host-controles blijven te verifiëren bij integratie |
