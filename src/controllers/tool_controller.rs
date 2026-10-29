@@ -12,7 +12,6 @@ pub async fn list_tools(State(registry): State<Arc<ToolRegistry>>) -> Json<Value
         .tools()
         .iter()
         .map(|tool| {
-
             // Maak een JSON-object voor de input schema van de tool
             let properties = tool
                 .parameters

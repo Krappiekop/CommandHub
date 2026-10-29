@@ -11,7 +11,6 @@ use std::sync::Arc;
 #[tokio::main]
 // De hoofdfunctie van de applicatie
 async fn main() -> Result<(), Box<dyn Error>> {
-
     // Initialiseer de tracing-subscriber voor logging
     tracing_subscriber::fmt()
         .with_env_filter(
