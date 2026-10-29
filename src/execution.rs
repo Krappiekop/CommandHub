@@ -6,14 +6,24 @@ use std::{
 };
 
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
+    io::AsyncReadExt,
     process::Command,
     sync::{OwnedSemaphorePermit, Semaphore},
 };
 
 use crate::{config::ToolDefinition, registry::ToolRegistry};
 
+use process_wrap::tokio::{CommandWrap, KillOnDrop};
+
+#[cfg(unix)]
+use process_wrap::tokio::ProcessGroup;
+
+#[cfg(windows)]
+use process_wrap::tokio::JobObject;
+
+
 #[derive(Debug)]
+// Representeert het resultaat van een uitgevoerde tool, inclusief successtatus, uitvoer, foutuitvoer, exitcode en duur van de uitvoering.
 pub struct ExecutionResult {
     pub success: bool,
     pub stdout: String,
@@ -23,6 +33,7 @@ pub struct ExecutionResult {
 }
 
 #[derive(Debug)]
+// Representeert mogelijke fouten die kunnen optreden tijdens de uitvoering van een tool, zoals onbekende tools, overschrijding van capaciteit of timeouts.
 pub enum ExecutionError {
     UnknownTool,
     ParametersNotSupported,
@@ -36,32 +47,38 @@ pub enum ExecutionError {
     ProcessKillFailed(io::Error),
 }
 
+// Definieert de maximale gelijktijdige uitvoeringen en de maximale uitvoerbytes voor de ExecutionService.
 const MAX_CONCURRENT_EXECUTIONS: usize = 4;
-
 const MAX_OUTPUT_BYTES: usize = 1024 * 1024;
 
+// Structuur die de uitvoer van een proces vastlegt, inclusief de gelezen bytes en de bijbehorende budgetpermissies.
 struct CapturedOutput {
     bytes: Vec<u8>,
     _budget_permits: Vec<OwnedSemaphorePermit>,
 }
 
+// Service die verantwoordelijk is voor het uitvoeren van tools, het beheren van gelijktijdige uitvoeringen en het afhandelen van uitvoerbeperkingen.
 pub struct ExecutionService {
     permits: Arc<Semaphore>,
 }
 
+// Implementeert de ExecutionService, inclusief methoden voor het starten van processen, het lezen van uitvoer en het afhandelen van fouten.
 impl ExecutionService {
+    // Creëert een nieuwe instantie van de ExecutionService met een gelimiteerd aantal gelijktijdige uitvoeringen.
     pub fn new() -> Self {
         Self {
             permits: Arc::new(Semaphore::new(MAX_CONCURRENT_EXECUTIONS)),
         }
     }
 
+    // Probeert een permit te verkrijgen voor het starten van een nieuwe uitvoering. Als de capaciteit is bereikt, wordt een fout geretourneerd.
     fn try_acquire(&self) -> Result<OwnedSemaphorePermit, ExecutionError> {
         Arc::clone(&self.permits)
             .try_acquire_owned()
             .map_err(|_| ExecutionError::CapacityExceeded)
     }
 
+    // Start een proces op basis van de opgegeven tooldefinitie en verkrijgt een permit voor gelijktijdige uitvoering. Als het starten van het proces mislukt, wordt een fout geretourneerd.
     fn start_process(
         &self,
         tool: &ToolDefinition,
@@ -74,18 +91,22 @@ impl ExecutionService {
         Ok((child, permit))
     }
 
+    // Voert een parameterloze tool uit op basis van de opgegeven naam en het geregistreerde tools. Het leest de uitvoer, wacht op voltooiing en retourneert het resultaat of een fout.
     pub(crate) async fn execute_parameterless(
         &self,
         registry: &ToolRegistry,
         name: &str,
     ) -> Result<ExecutionResult, ExecutionError> {
+        // Zoek de tooldefinitie op basis van de naam en controleer of deze geen parameters heeft.
         let tool = find_parameterless_tool(registry, name)?;
         let started_at = Instant::now();
         let (mut child, _permit) = self.start_process(tool)?;
 
+        // Bepaal de timeout voor de uitvoering, standaard 10 seconden als geen specifieke timeout is opgegeven.
         let timeout = Duration::from_millis(tool.timeout.unwrap_or(10_000));
         let budget = Arc::new(Semaphore::new(MAX_OUTPUT_BYTES));
 
+        // Start een asynchrone taak om de uitvoer van het proces te lezen en te wachten op voltooiing.
         let uitvoering = async {
             let (stdout, stderr) = read_process_output(&mut child, budget).await?;
             let status = child
@@ -96,6 +117,7 @@ impl ExecutionService {
             Ok::<_, ExecutionError>((stdout, stderr, status))
         };
 
+        // Wacht op de uitvoering met een timeout. Als de uitvoering succesvol is, retourneer het resultaat. Als er een fout optreedt of de timeout wordt overschreden, stop het proces en retourneer de fout.
         let (stdout, stderr, status) = match tokio::time::timeout(timeout, uitvoering).await {
             Ok(Ok(resultaat)) => resultaat,
             Ok(Err(fout)) => {
@@ -108,6 +130,7 @@ impl ExecutionService {
             }
         };
 
+        // Bouw het ExecutionResult op basis van de verkregen uitvoer, status en duur van de uitvoering.
         Ok(ExecutionResult {
             success: status.success(),
             stdout: String::from_utf8_lossy(&stdout.bytes).into_owned(),
@@ -118,16 +141,19 @@ impl ExecutionService {
     }
 }
 
+// Zoekt een parameterloze tool op basis van de naam in het opgegeven ToolRegistry. Als de tool niet bestaat of parameters heeft, wordt een fout geretourneerd.
 pub fn find_parameterless_tool<'a>(
     registry: &'a ToolRegistry,
     name: &str,
 ) -> Result<&'a ToolDefinition, ExecutionError> {
+    // Zoek de tooldefinitie op basis van de naam in het ToolRegistry.
     let tool = registry
         .tools()
         .iter()
         .find(|tool| tool.name == name)
         .ok_or(ExecutionError::UnknownTool)?;
 
+    // Controleer of de tool parameters heeft of placeholders in de argumenten bevat. Als dat het geval is, retourneer een fout.
     let has_parameters = !tool.parameters.is_empty();
     let has_placeholders = tool
         .arguments
@@ -141,12 +167,13 @@ pub fn find_parameterless_tool<'a>(
     Ok(tool)
 }
 
+// Creëert een Command-object op basis van de opgegeven ToolDefinition, inclusief het instellen van de commandoregel, argumenten en standaardinvoer/-uitvoer/-fout.
 fn create_command(tool: &ToolDefinition) -> Command {
     let mut command = Command::new(tool.command.as_str());
 
+    // Voeg de argumenten van de tool toe aan het
     command
         .args(tool.arguments.iter().map(String::as_str))
-        .kill_on_drop(true)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -154,17 +181,36 @@ fn create_command(tool: &ToolDefinition) -> Command {
     command
 }
 
+// Creëert een CommandWrap-object dat het proces op een platformonafhankelijke manier kan beheren, inclusief het instellen van procesgroepen of jobobjecten en het automatisch beëindigen van het proces bij het loslaten van de wrapper.
+fn create_wrapped_command(tool: &ToolDefinition) -> CommandWrap {
+    let mut command = CommandWrap::from(create_command(tool));
+
+    // Voeg platformafhankelijke wrappers toe om het proces te beheren en ervoor te zorgen dat het correct wordt beëindigd bij het loslaten van de wrapper.
+    #[cfg(unix)]
+    command.wrap(ProcessGroup::leader());
+
+    #[cfg(windows)]
+    command.wrap(JobObject);
+
+    command.wrap(KillOnDrop);
+    command
+}
+
+// Leest de uitvoer van een asynchrone reader met een opgegeven budget voor het aantal bytes. Als de uitvoer boven het budget uitkomt, wordt een fout geretourneerd.
 async fn read_capped<R>(
     mut reader: R,
     budget: Arc<Semaphore>,
 ) -> Result<CapturedOutput, ExecutionError>
+// De functie read_capped leest de uitvoer van een asynchrone reader (zoals stdout of stderr van een proces) en beperkt de hoeveelheid gelezen bytes op basis van een opgegeven budget. Als de uitvoer boven het budget uitkomt, wordt een fout geretourneerd.
 where
     R: tokio::io::AsyncRead + Unpin,
 {
+    // Initialiseer een buffer om de gelezen bytes op te slaan en een vector om de verkregen budgetpermissies bij te houden.
     let mut bytes = Vec::new();
     let mut budget_permits = Vec::new();
     let mut buffer = [0_u8; 8192];
 
+    // Lees de uitvoer in een lus totdat er geen bytes meer beschikbaar zijn of totdat het budget is overschreden.
     loop {
         let bytes_read = reader
             .read(&mut buffer)
@@ -175,6 +221,7 @@ where
             break;
         }
 
+        // Probeer het aantal gelezen bytes te verkrijgen van het budget. Als het budget is overschreden, retourneer een fout.
         let permit = Arc::clone(&budget)
             .try_acquire_many_owned(bytes_read as u32)
             .map_err(|_| ExecutionError::OutputLimitExceeded)?;
@@ -189,10 +236,12 @@ where
     })
 }
 
+// Leest de uitvoer van een proces (zowel stdout als stderr) met een gedeeld budget voor het aantal bytes. Als de gecombineerde uitvoer boven het budget uitkomt, wordt een fout geretourneerd.
 async fn read_process_output(
     child: &mut tokio::process::Child,
     budget: Arc<Semaphore>,
 ) -> Result<(CapturedOutput, CapturedOutput), ExecutionError> {
+    // Neem de stdout- en stderr-pijpen van het proces en lees ze parallel met behulp van read_capped. Als een van de pijpen ontbreekt, retourneer een fout.
     let stdout = child.stdout.take().ok_or_else(|| {
         ExecutionError::OutputReadFailed(io::Error::other("stdout-pipe ontbreekt"))
     })?;
@@ -200,17 +249,21 @@ async fn read_process_output(
         ExecutionError::OutputReadFailed(io::Error::other("stderr-pipe ontbreekt"))
     })?;
 
+    // Gebruik tokio::try_join! om de uitvoer van stdout en stderr parallel te lezen met een gedeeld budget. Als een van de lezingen boven het budget uitkomt, wordt een fout geretourneerd.
     tokio::try_join!(
         read_capped(stdout, Arc::clone(&budget)),
         read_capped(stderr, budget)
     )
 }
 
+// Stopt een lopend proces door te controleren of het al is voltooid. Als het proces nog actief is, wordt het beëindigd. Eventuele fouten bij het wachten of beëindigen van het proces worden geretourneerd als ExecutionError.
 async fn stop_child(child: &mut tokio::process::Child) -> Result<(), ExecutionError> {
+    // Controleer of het proces al is voltooid door te proberen te wachten op de status. Als het proces nog actief is, wordt het beëindigd.
     let status = child
         .try_wait()
         .map_err(ExecutionError::ProcessWaitFailed)?;
 
+    // Als het proces nog actief is, probeer het te beëindigen en retourneer eventuele fouten als ExecutionError.
     if status.is_none() {
         child
             .kill()
@@ -221,6 +274,7 @@ async fn stop_child(child: &mut tokio::process::Child) -> Result<(), ExecutionEr
     Ok(())
 }
 
+// Implementeert de Display-trait voor ExecutionError om een leesbare foutmelding te genereren op basis van het type fout.
 impl std::fmt::Display for ExecutionError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -240,13 +294,14 @@ impl std::fmt::Display for ExecutionError {
     }
 }
 
+// Implementeert de Error-trait voor ExecutionError om de bron van de fout te kunnen achterhalen, indien beschikbaar.
 impl std::error::Error for ExecutionError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::ProcessStartFailed(error)
             | Self::OutputReadFailed(error)
             | Self::ProcessWaitFailed(error)
-            | Self::ProcessWaitFailed(error) => Some(error),
+            | Self::ProcessKillFailed(error) => Some(error),
             _ => None,
         }
     }
@@ -254,7 +309,7 @@ impl std::error::Error for ExecutionError {
 
 #[cfg(test)]
 mod tests {
-    use serde::de::Unexpected::Bytes;
+    use tokio::io::AsyncWriteExt;
 
     use super::*;
     use crate::config::{ConfigFile, ParameterDefinition, ParameterType};
@@ -274,7 +329,29 @@ mod tests {
         ToolRegistry::new(config)
     }
 
+    #[cfg(any(windows, unix))]
+    #[tokio::test]
+    // Deze test is bedoeld om te controleren of de platformwrapper correct werkt. Het start een proces met de wrapper en wacht op een succesvolle afloop.
+    async fn start_met_platformwrapper_en_wacht_op_succes() {
+        let registry = test_registry(Vec::new());
+        let tool = find_parameterless_tool(&registry, "git_versie")
+            .expect("de ingestelde parameterloze tool moet bestaan");
+
+        let mut command = create_wrapped_command(tool);
+        let mut child = command
+            .spawn()
+            .expect("Het process met platformwrapper moet starten");
+
+        let status = child
+            .wait()
+            .await
+            .expect("op het proces met platformwrapper moet gewacht kunnen worden");
+
+        assert!(status.success());
+    }
+
     #[test]
+    // Deze test controleert of de functie find_parameterless_tool correct een tool zonder parameters kan vinden.
     fn vindt_parameterloze_tool() {
         let registry = test_registry(Vec::new());
 
@@ -285,6 +362,7 @@ mod tests {
     }
 
     #[test]
+    // Deze test controleert of de functie find_parameterless_tool correct een foutmelding geeft bij een onbekende tool.
     fn weigert_onbekende_tool() {
         let registry = test_registry(Vec::new());
 
@@ -294,6 +372,7 @@ mod tests {
     }
 
     #[test]
+    // Deze test controleert of de functie find_parameterless_tool correct een foutmelding geeft bij een tool met parameters.
     fn weigert_tool_met_parameters() {
         let registry = test_registry(vec![ParameterDefinition {
             name: "pad".to_owned(),
@@ -310,6 +389,7 @@ mod tests {
     }
 
     #[test]
+    // Deze test controleert of de ExecutionService correct een foutmelding geeft wanneer de maximale uitvoercapaciteit is bereikt.
     fn weigert_extra_uitvoering_bij_volledige_capaciteit() {
         let service = ExecutionService::new();
         let _permits: Vec<_> = (0..MAX_CONCURRENT_EXECUTIONS)
@@ -327,6 +407,7 @@ mod tests {
     }
 
     #[test]
+    // Deze test controleert of de ExecutionService correct de capaciteit vrijgeeft wanneer het starten van een proces mislukt.
     fn geeft_capaciteit_vrij_als_starten_mislukt() {
         let service = ExecutionService::new();
         let tool = ToolDefinition {
@@ -353,6 +434,7 @@ mod tests {
     }
 
     #[tokio::test]
+    // Deze test controleert of de ExecutionService correct een proces start en wacht op een succesvolle afloop.
     async fn start_proces_en_wacht_op_succesvolle_afloop() {
         let service = ExecutionService::new();
         let registry = test_registry(Vec::new());
@@ -369,6 +451,7 @@ mod tests {
     }
 
     #[tokio::test]
+    // Deze test controleert of de ExecutionService correct een resultaat geeft bij een proces met een niet-succesvolle exitcode.
     async fn geeft_resultaat_bij_niet_succesvolle_exitcode() {
         let config = ConfigFile {
             tools: vec![ToolDefinition {
@@ -395,6 +478,7 @@ mod tests {
 
     #[cfg(any(windows, unix))]
     #[tokio::test]
+    // Deze test controleert of de ExecutionService correct een timeout geeft bij een proces dat te lang duurt.
     async fn geeft_timeout_als_proces_te_lang_duurt() {
         #[cfg(windows)]
         let (command, arguments) = (
@@ -435,6 +519,7 @@ mod tests {
     }
 
     #[tokio::test]
+    // Deze test controleert of de ExecutionService correct een foutmelding geeft bij een proces dat te veel uitvoer genereert.
     async fn stopt_proces_bij_outputoverschrijding() {
         let testprogramma = std::env::current_exe()
             .expect("het pad naar het huidige testprogramma moet beschikbaar zijn");
@@ -476,6 +561,7 @@ mod tests {
     }
 
     #[tokio::test]
+    // Deze test controleert of de read_capped functie correct uitvoer onder de limiet kan lezen.
     async fn leest_output_binnen_de_limiet() {
         let (mut schrijver, lezer) = tokio::io::duplex(16);
         schrijver
@@ -493,6 +579,7 @@ mod tests {
     }
 
     #[tokio::test]
+    // Deze test controleert of de read_capped functie correct een foutmelding geeft wanneer de gecombineerde uitvoer van stdout en stderr boven de limiet uitkomt.
     async fn begrenst_stdout_en_stderr_met_een_gedeeld_budget() {
         let (mut stdout_writer, stdout_reader) = tokio::io::duplex(16);
         let (mut stderr_writer, stderr_reader) = tokio::io::duplex(16);
@@ -521,6 +608,7 @@ mod tests {
     }
 
     #[tokio::test]
+    // Deze test controleert of de read_capped functie correct een foutmelding geeft wanneer de uitvoer boven de limiet uitkomt.
     async fn weigert_output_boven_de_limiet() {
         let (mut schrijver, lezer) = tokio::io::duplex(16);
         schrijver
@@ -540,6 +628,7 @@ mod tests {
 
     #[test]
     #[ignore]
+    // Deze test is bedoeld om te controleren of de ExecutionService correct een foutmelding geeft bij een proces dat te veel uitvoer genereert. Het wordt genegeerd omdat het een groot aantal bytes schrijft en daardoor de testuitvoer kan vervuilen.
     fn schrijft_output_boven_de_limiet() {
         use std::io::Write;
 

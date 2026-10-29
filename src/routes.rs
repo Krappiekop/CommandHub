@@ -7,6 +7,7 @@ use crate::{
     registry::ToolRegistry,
 };
 
+// Maak een router voor de Axum-server met de routes en de ToolRegistry
 pub fn router(registry: Arc<ToolRegistry>) -> Router {
     Router::new()
         .route("/status", get(status))
@@ -14,6 +15,7 @@ pub fn router(registry: Arc<ToolRegistry>) -> Router {
         .with_state(registry)
 }
 
+// ------------------------------------------ TESTS ------------------------------------------
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -52,6 +54,7 @@ mod tests {
     }
 
     #[tokio::test]
+    // Test of de /tools route de juiste tool metadata en input schema retourneert
     async fn tools_route_returns_tool_metadata_and_input_schema() {
         let response = router(test_registry())
             .oneshot(
