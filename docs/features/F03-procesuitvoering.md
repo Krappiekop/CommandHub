@@ -35,28 +35,38 @@ Bouw F03 iteratief: begin met een kleine werkende verticale slice die een geconf
 - De standaardtimeout is 10.000 ms en het maximum 60.000 ms.
 - stdout en stderr worden samen begrensd op 1 MiB. Bij overschrijding wordt de procesboom beëindigd en volgt een expliciete fout.
 - Requestbody maximaal 16 KiB; maximaal vier gelijktijdige uitvoeringen. Bij volle capaciteit direct afwijzen.
-- `process-wrap` 10.0.1 is toegevoegd met de Tokio-feature. De executor gebruikt Unix `ProcessGroup`, Windows `JobObject` en `KillOnDrop`. Een smoke-test start en wacht op een wrapped proces; volledige opruiming van subprocessen is nog niet bewezen.
+- `process-wrap` 10.0.1 is toegevoegd met de Tokio-feature. De executor gebruikt Unix `ProcessGroup`, Windows `JobObject` en `KillOnDrop`. Gerichte Windows-tests controleren dat subprocessen verdwijnen na timeout, outputoverschrijding en annulering, ook bij een eerder afgerond direct child. Linux blijft te verifiëren.
+- Expliciete annulering per uitvoering loopt via `oneshot::Receiver<()>`. Alleen een ontvangen bericht annuleert; het droppen van de zender zonder bericht niet. Server-shutdown en transportmapping voor annulering zijn nog open.
 - HTTP-mapping: 400 invoerfout, 404 onbekende tool, 413 te grote requestbody, 503 volle capaciteit, 504 timeout, 502 outputlimiet. Een proces met niet-nul exitcode geeft HTTP 200 met `success: false`.
 
 ## Todo
 
 - [x] Gedeelde kernresultaten en fouttypen definiëren.
 - [x] Command-opbouw met geconfigureerde executable, losse vaste argumenten, gesloten stdin en gepipete stdout/stderr voorbereiden.
-- [x] Basisexecutor voor parameterloze tools maken; executable en vaste argumenten komen uit de beheerdersconfiguratie en de serveromgeving/werkdirectory worden geërfd. Procesboomopruiming en annulering blijven open.
+- [x] Basisexecutor voor parameterloze tools maken; executable en vaste argumenten komen uit de beheerdersconfiguratie en de serveromgeving/werkdirectory worden geërfd.
 - [x] Semaphore voor maximaal vier gelijktijdige uitvoeringen en een helper voor de gecombineerde outputlimiet toevoegen.
-- [x] Timeout, outputlimiet en concurrentielimiet implementeren voor de directe child; volledige procesboomopruiming blijft open.
+- [x] Timeout, outputlimiet en concurrentielimiet implementeren; subprocessopruiming in gerichte Windows-tests controleren.
 - [x] `process-wrap` integreren voor Unix-procesgroepen en Windows Job Objects.
-- [ ] Procesboomopruiming bij een child met eigen subprocess testen bij timeout en outputoverschrijding op Windows en Linux; annulering en shutdown afhandelen.
+- [x] `stop_child` alleen laten beëindigen bij ontbrekende exitstatus; regressietest voor een al afgerond proces uitvoeren op Windows.
+- [x] Testbinary als child een subprocess laten starten en het PID vastleggen; Windows-procescontrole delen via `windows_process_ids`.
+- [x] Subprocessopruiming en capaciteitsvrijgave bij timeout en outputoverschrijding op Windows testen.
+- [x] Windows-scenario testen waarin het directe child eerder dan het subprocess eindigt.
+- [x] Expliciete annulering met `oneshot` en `tokio::select!` implementeren; signaal, gesloten kanaal en subprocessopruiming met capaciteitsvrijgave op Windows testen.
+- [ ] Server-shutdown alle actieve uitvoeringen laten annuleren en hun opruiming afwachten.
+- [ ] Droppen/afbreken van de uitvoeringsfuture afzonderlijk testen en beleid vastleggen.
+- [ ] Procesboomopruiming bij timeout, outputoverschrijding, eerder afgerond child en annulering op Linux rechtstreeks controleren en uitvoeren.
+- [ ] Windows-procescontrole robuuster maken tegen vertraagde beëindiging en de blokkerende `tasklist`-aanroep begrenzen.
 - [ ] POST /tools/{toolname} voor tools zonder dynamische parameters aansluiten.
 - [x] Gerichte tests voor succesvolle/niet-succesvolle exit, timeout, outputlimiet en capaciteitsvrijgave toevoegen.
-- [ ] Reproduceerbaar testproces maken dat ook een subprocess start en het procesboomgedrag controleert.
-- [ ] Logging en reproduceerbare tests toevoegen.
+- [x] Reproduceerbare subprocess-helper met PID-bestand, optionele grote output en vroegtijdig afgerond child toevoegen; gecontroleerde annulering laten wachten op een leesbaar PID.
+- [ ] Uitvoeringslogging en HTTP-integratietests toevoegen; geen gevoelige inhoud loggen.
+- [ ] Formatter-/lintmeldingen oplossen en alle verplichte Cargo-controles opnieuw uitvoeren.
 
 ## Acceptatiecriteria
 
 - [ ] Alleen geconfigureerde executables voor parameterloze tools worden gestart; geen clientgestuurde command-, argument- of shellinvoer.
 - [x] Stdout/stderr worden gelijktijdig en begrensd gelezen.
-- [x] Timeout, te grote output en volle capaciteit hebben voorspelbaar gedrag voor de geteste directe child; procesboomgedrag met subprocessen blijft open.
+- [x] Timeout, te grote output en volle capaciteit hebben voorspelbaar gedrag in de geteste Windows-scenario's, inclusief subprocessen en capaciteitsvrijgave.
 - [ ] Procesopruiming is getest en platformbeperkingen zijn expliciet.
 
 ## Bewijs en koppelingen
@@ -64,12 +74,12 @@ Bouw F03 iteratief: begin met een kleine werkende verticale slice die een geconf
 - GitHub issue: nog vast te leggen.
 - Branch: feature/F03-procesuitvoering.
 - Pull request: nog niet aangemaakt.
-- Tests/handmatige verificatie: gebruiker meldt dat `cargo test --locked execution::tests` slaagt: 13 passed, 1 ignored, 14 filtered. Dit is een gerichte test op Windows; volledige Cargo-controles, subprocessopruiming op beide platforms en HTTP-integratie zijn nog niet geverifieerd. Zie de [F03-notitie](../../notities/F03-procesuitvoering.md).
+- Tests/handmatige verificatie (2026-10-29, Windows): 20 geslaagde execution-tests gerapporteerd via `cargo test --locked execution::tests`, naast 2 genegeerde helpers en 14 overige tests buiten het filter. De helpers draaien via bijbehorende tests als childproces. De code is gelezen; PID-controles gelden alleen op Windows. De eerdere volledige-suitecontrole (29 passed, 2 ignored) dateert van vóór de uitbreidingen. Formatter en Clippy waren afgekeurd en zijn niet opnieuw uitgevoerd; de waarschuwing voor ongebruikte `Cancelled` is niet meer gerapporteerd. Zie de [F03-notitie](../../notities/F03-procesuitvoering.md).
 - [Featurenotitie](../../notities/F03-procesuitvoering.md).
 
 ## Afronden
 
 - [ ] Relevante controles geslaagd.
-- [ ] Documentatie en notitie bijgewerkt.
-- [ ] Voortgang bijgewerkt.
+- [x] Documentatie en notitie bijgewerkt tot de gecontroleerde stand van 2026-10-29.
+- [x] Voortgang bijgewerkt tot de gecontroleerde stand van 2026-10-29.
 - [ ] PR gemerged; pas daarna status Klaar.

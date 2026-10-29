@@ -1,19 +1,11 @@
-use std::{
-    io,
-    process::Stdio,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{ io, process::Stdio, sync::Arc, time::{ Duration, Instant } };
 
-use tokio::{
-    io::AsyncReadExt,
-    process::Command,
-    sync::{OwnedSemaphorePermit, Semaphore},
-};
+use tokio::{ io::AsyncReadExt, process::Command, sync::{ OwnedSemaphorePermit, Semaphore } };
+use tokio::sync::oneshot;
 
-use crate::{config::ToolDefinition, registry::ToolRegistry};
+use crate::{ config::ToolDefinition, registry::ToolRegistry };
 
-use process_wrap::tokio::{ChildWrapper, CommandWrap, KillOnDrop};
+use process_wrap::tokio::{ ChildWrapper, CommandWrap, KillOnDrop };
 
 #[cfg(unix)]
 use process_wrap::tokio::ProcessGroup;
@@ -80,7 +72,7 @@ impl ExecutionService {
     // Start een proces op basis van de opgegeven tooldefinitie en verkrijgt een permit voor gelijktijdige uitvoering. Als het starten van het proces mislukt, wordt een fout geretourneerd.
     fn start_process(
         &self,
-        tool: &ToolDefinition,
+        tool: &ToolDefinition
     ) -> Result<(Box<dyn ChildWrapper>, OwnedSemaphorePermit), ExecutionError> {
         let permit = self.try_acquire()?;
         let child = create_wrapped_command(tool)
@@ -94,7 +86,18 @@ impl ExecutionService {
     pub(crate) async fn execute_parameterless(
         &self,
         registry: &ToolRegistry,
+        name: &str
+    ) -> Result<ExecutionResult, ExecutionError> {
+        let (_cancel_sender, cancel_receiver) = oneshot::channel();
+
+        self.execute_parameterless_with_cancellation(registry, name, cancel_receiver).await
+    }
+
+    pub(crate) async fn execute_parameterless_with_cancellation(
+        &self,
+        registry: &ToolRegistry,
         name: &str,
+        _cancellation: oneshot::Receiver<()>
     ) -> Result<ExecutionResult, ExecutionError> {
         // Zoek de tooldefinitie op basis van de naam en controleer of deze geen parameters heeft.
         let tool = find_parameterless_tool(registry, name)?;
@@ -108,16 +111,21 @@ impl ExecutionService {
         // Start een asynchrone taak om de uitvoer van het proces te lezen en te wachten op voltooiing.
         let uitvoering = async {
             let (stdout, stderr) = read_process_output(child.as_mut(), budget).await?;
-            let status = child
-                .wait()
-                .await
-                .map_err(ExecutionError::ProcessWaitFailed)?;
+            let status = child.wait().await.map_err(ExecutionError::ProcessWaitFailed)?;
 
             Ok::<_, ExecutionError>((stdout, stderr, status))
         };
 
         // Wacht op de uitvoering met een timeout. Als de uitvoering succesvol is, retourneer het resultaat. Als er een fout optreedt of de timeout wordt overschreden, stop het proces en retourneer de fout.
-        let (stdout, stderr, status) = match tokio::time::timeout(timeout, uitvoering).await {
+        let afloop =
+            tokio::select! {
+            resultaat = tokio::time::timeout(timeout, uitvoering) => resultaat,
+            Ok(()) = _cancellation => {
+                Ok(Err(ExecutionError::Cancelled))
+            }
+        };
+
+        let (stdout, stderr, status) = match afloop {
             Ok(Ok(resultaat)) => resultaat,
             Ok(Err(fout)) => {
                 stop_child(child.as_mut()).await?;
@@ -143,7 +151,7 @@ impl ExecutionService {
 // Zoekt een parameterloze tool op basis van de naam in het opgegeven ToolRegistry. Als de tool niet bestaat of parameters heeft, wordt een fout geretourneerd.
 pub fn find_parameterless_tool<'a>(
     registry: &'a ToolRegistry,
-    name: &str,
+    name: &str
 ) -> Result<&'a ToolDefinition, ExecutionError> {
     // Zoek de tooldefinitie op basis van de naam in het ToolRegistry.
     let tool = registry
@@ -154,10 +162,9 @@ pub fn find_parameterless_tool<'a>(
 
     // Controleer of de tool parameters heeft of placeholders in de argumenten bevat. Als dat het geval is, retourneer een fout.
     let has_parameters = !tool.parameters.is_empty();
-    let has_placeholders = tool
-        .arguments
+    let has_placeholders = tool.arguments
         .iter()
-        .any(|argument| argument.contains('{') || argument.contains('}'));
+        .any(|argument| (argument.contains('{') || argument.contains('}')));
 
     if has_parameters || has_placeholders {
         return Err(ExecutionError::ParametersNotSupported);
@@ -198,11 +205,11 @@ fn create_wrapped_command(tool: &ToolDefinition) -> CommandWrap {
 // Leest de uitvoer van een asynchrone reader met een opgegeven budget voor het aantal bytes. Als de uitvoer boven het budget uitkomt, wordt een fout geretourneerd.
 async fn read_capped<R>(
     mut reader: R,
-    budget: Arc<Semaphore>,
+    budget: Arc<Semaphore>
 ) -> Result<CapturedOutput, ExecutionError>
-where
-    // De functie read_capped leest de uitvoer van een asynchrone reader (zoals stdout of stderr van een proces) en beperkt de hoeveelheid gelezen bytes op basis van een opgegeven budget. Als de uitvoer boven het budget uitkomt, wordt een fout geretourneerd.
-    R: tokio::io::AsyncRead + Unpin,
+    where
+        // De functie read_capped leest de uitvoer van een asynchrone reader (zoals stdout of stderr van een proces) en beperkt de hoeveelheid gelezen bytes op basis van een opgegeven budget. Als de uitvoer boven het budget uitkomt, wordt een fout geretourneerd.
+        R: tokio::io::AsyncRead + Unpin
 {
     // Initialiseer een buffer om de gelezen bytes op te slaan en een vector om de verkregen budgetpermissies bij te houden.
     let mut bytes = Vec::new();
@@ -211,10 +218,7 @@ where
 
     // Lees de uitvoer in een lus totdat er geen bytes meer beschikbaar zijn of totdat het budget is overschreden.
     loop {
-        let bytes_read = reader
-            .read(&mut buffer)
-            .await
-            .map_err(ExecutionError::OutputReadFailed)?;
+        let bytes_read = reader.read(&mut buffer).await.map_err(ExecutionError::OutputReadFailed)?;
 
         if bytes_read == 0 {
             break;
@@ -238,31 +242,30 @@ where
 // Leest de uitvoer van een proces (zowel stdout als stderr) met een gedeeld budget voor het aantal bytes. Als de gecombineerde uitvoer boven het budget uitkomt, wordt een fout geretourneerd.
 async fn read_process_output(
     child: &mut dyn ChildWrapper,
-    budget: Arc<Semaphore>,
+    budget: Arc<Semaphore>
 ) -> Result<(CapturedOutput, CapturedOutput), ExecutionError> {
-    let stdout = child.stdout().take().ok_or_else(|| {
-        ExecutionError::OutputReadFailed(io::Error::other("stdout-pipe ontbreekt"))
-    })?;
-    let stderr = child.stderr().take().ok_or_else(|| {
-        ExecutionError::OutputReadFailed(io::Error::other("stderr-pipe ontbreekt"))
-    })?;
+    let stdout = child
+        .stdout()
+        .take()
+        .ok_or_else(|| {
+            ExecutionError::OutputReadFailed(io::Error::other("stdout-pipe ontbreekt"))
+        })?;
+    let stderr = child
+        .stderr()
+        .take()
+        .ok_or_else(|| {
+            ExecutionError::OutputReadFailed(io::Error::other("stderr-pipe ontbreekt"))
+        })?;
 
-    tokio::try_join!(
-        read_capped(stdout, Arc::clone(&budget)),
-        read_capped(stderr, budget)
-    )
+    tokio::try_join!(read_capped(stdout, Arc::clone(&budget)), read_capped(stderr, budget))
 }
 
 // Stopt een lopend proces door te controleren of het al is voltooid. Als het proces nog actief is, wordt het beëindigd. Eventuele fouten bij het wachten of beëindigen van het proces worden geretourneerd als ExecutionError.
 async fn stop_child(child: &mut dyn ChildWrapper) -> Result<(), ExecutionError> {
-    let status = child
-        .try_wait()
-        .map_err(ExecutionError::ProcessWaitFailed)?;
-
-    let kill_future = child.kill();
-    std::pin::Pin::from(kill_future)
-        .await
-        .map_err(ExecutionError::ProcessKillFailed)?;
+    if child.try_wait().map_err(ExecutionError::ProcessWaitFailed)?.is_none() {
+        let kill_future = child.kill();
+        std::pin::Pin::from(kill_future).await.map_err(ExecutionError::ProcessKillFailed)?;
+    }
 
     Ok(())
 }
@@ -291,7 +294,7 @@ impl std::fmt::Display for ExecutionError {
 impl std::error::Error for ExecutionError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Self::ProcessStartFailed(error)
+            | Self::ProcessStartFailed(error)
             | Self::OutputReadFailed(error)
             | Self::ProcessWaitFailed(error)
             | Self::ProcessKillFailed(error) => Some(error),

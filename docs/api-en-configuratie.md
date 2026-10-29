@@ -64,7 +64,9 @@ F03 hanteert maximaal 1 MiB gecombineerde stdout en stderr, maximaal 16 KiB requ
 
 Het childproces erft de omgeving en werkdirectory van het serverproces. De client kan deze niet instellen. Beheer van de serveromgeving is daarom onderdeel van het vertrouwensbeleid; omgevingswaarden worden niet gelogd.
 
-Timeout en outputoverschrijding worden in de huidige F03-uitvoermethode afgehandeld; de gebruiker meldt dat de gerichte tests hiervoor slagen. [`process-wrap`](https://docs.rs/process-wrap/) 10.0.1 met feature `tokio1` is geïntegreerd: Unix `ProcessGroup`, Windows `JobObject` en `KillOnDrop`. De wrapper-smoketest toont starten en wachten, maar procesboomopruiming van subprocessen is nog niet getest of gegarandeerd. Annulering en HTTP-integratie zijn eveneens nog open.
+Timeout, outputoverschrijding en expliciete annulering worden in de F03-kern afgehandeld. [`process-wrap`](https://docs.rs/process-wrap/) 10.0.1 met feature `tokio1` gebruikt Unix `ProcessGroup`, Windows `JobObject` en `KillOnDrop`. Gerapporteerd testresultaat: 20 geslaagde execution-tests op Windows; subprocess-PID's worden na timeout, outputoverschrijding en annulering gecontroleerd, ook bij een eerder afgerond direct child. Linux-verificatie, server-shutdown en HTTP-integratie blijven open.
+
+De interne methode `execute_parameterless_with_cancellation` ontvangt een `oneshot::Receiver<()>`. Een expliciet bericht leidt na de opruimroute tot `ExecutionError::Cancelled`; een opruimfout kan die uitkomst vervangen. Het sluiten van de zender zonder bericht annuleert niet. `execute_parameterless` blijft beschikbaar zonder expliciet annuleringsverzoek. Dit voegt geen publiek annuleringsendpoint toe. De HTTP/MCP-mapping voor annulering, clientdisconnects en shutdown moet nog worden vastgesteld; de bestaande HTTP-tabel hierboven dekt die situaties nog niet.
 
 ## MCP
 

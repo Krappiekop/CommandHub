@@ -51,7 +51,7 @@ De keuze tussen absoluut pad en zoeken via `PATH` is gemaakt. De toegestane exec
 
 - GitHub issue: nog aan te maken.
 - Branch: feature/F02-toolconfiguratie.
-- Pull request: gemerged; merge bevestigd door gebruiker op 2026-10-26.
+- Pull request: gemerged; merge bevestigd op 2026-10-26.
 - Tests/handmatige verificatie: gerichte configuratietests en controles van startup, herstart zonder rebuild en `GET /tools`; zie de F02-notitie.
 - [Featurenotitie](../../notities/F02-toolconfiguratie.md).
 
