@@ -36,7 +36,7 @@ Bouw F03 iteratief: begin met een kleine werkende verticale slice die een geconf
 - stdout en stderr worden samen begrensd op 1 MiB. Bij overschrijding wordt de procesboom beëindigd en volgt een expliciete fout.
 - Requestbody maximaal 16 KiB; maximaal vier gelijktijdige uitvoeringen. Bij volle capaciteit direct afwijzen.
 - `process-wrap` 10.0.1 is toegevoegd met de Tokio-feature. De executor gebruikt Unix `ProcessGroup`, Windows `JobObject` en `KillOnDrop`. Gerichte Windows-tests controleren dat subprocessen verdwijnen na timeout, outputoverschrijding en annulering, ook bij een eerder afgerond direct child. Linux blijft te verifiëren.
-- Expliciete annulering per uitvoering loopt via `oneshot::Receiver<()>`. Alleen een ontvangen bericht annuleert; het droppen van de zender zonder bericht niet. Server-shutdown en transportmapping voor annulering zijn nog open.
+- Expliciete annulering per uitvoering loopt via `oneshot::Receiver<()>`. Alleen een ontvangen bericht annuleert; het droppen van de zender zonder bericht niet. Shutdown gebruikt een gedeeld `watch`-signaal en wacht op capaciteitsvrijgave. HTTP vertaalt annulering naar 503; MCP en clientdisconnectbeleid blijven open.
 - HTTP-mapping: 400 invoerfout, 404 onbekende tool, 413 te grote requestbody, 503 volle capaciteit, 504 timeout, 502 outputlimiet. Een proces met niet-nul exitcode geeft HTTP 200 met `success: false`.
 
 ## Todo
@@ -52,19 +52,23 @@ Bouw F03 iteratief: begin met een kleine werkende verticale slice die een geconf
 - [x] Subprocessopruiming en capaciteitsvrijgave bij timeout en outputoverschrijding op Windows testen.
 - [x] Windows-scenario testen waarin het directe child eerder dan het subprocess eindigt.
 - [x] Expliciete annulering met `oneshot` en `tokio::select!` implementeren; signaal, gesloten kanaal en subprocessopruiming met capaciteitsvrijgave op Windows testen.
-- [ ] Server-shutdown alle actieve uitvoeringen laten annuleren en hun opruiming afwachten.
-- [ ] Droppen/afbreken van de uitvoeringsfuture afzonderlijk testen en beleid vastleggen.
+- [x] Server-shutdown signaleren, nieuwe uitvoeringen weigeren en capaciteitsvrijgave afwachten; Windows-subprocesstest, wachtgedrag en Ctrl+C zonder actieve tools controleren.
+- [x] Future-drop en Tokio-taakafbreking op Windows afzonderlijk testen; expliciete annulering/shutdown als normale stoproute en `KillOnDrop` als vangnet vastleggen. Linux valt onder de platformcontrole hieronder.
 - [ ] Procesboomopruiming bij timeout, outputoverschrijding, eerder afgerond child en annulering op Linux rechtstreeks controleren en uitvoeren.
-- [ ] Windows-procescontrole robuuster maken tegen vertraagde beëindiging en de blokkerende `tasklist`-aanroep begrenzen.
-- [ ] POST /tools/{toolname} voor tools zonder dynamische parameters aansluiten.
+- [x] Windows-procescontrole async maken met 3 s timeout per `tasklist`, `kill_on_drop` en herhaald controleren tot maximaal 5 s met intervallen van 50 ms. Geen harde OS-processtartgarantie.
+- [x] POST /tools/{toolname} aansluiten met gedeelde state, uitsluitend `{}`, 16 KiB bodylimiet, resultaatmodel en vaste foutresponses; Windows-routetests en echte POST controleren.
 - [x] Gerichte tests voor succesvolle/niet-succesvolle exit, timeout, outputlimiet en capaciteitsvrijgave toevoegen.
 - [x] Reproduceerbare subprocess-helper met PID-bestand, optionele grote output en vroegtijdig afgerond child toevoegen; gecontroleerde annulering laten wachten op een leesbaar PID.
-- [ ] Uitvoeringslogging en HTTP-integratietests toevoegen; geen gevoelige inhoud loggen.
+- [x] HTTP-tests voor succes, niet-nul exit, 400/404/413/500/502/503/504, bodygrens, parameterafwijzing en shutdownafwijzing uitvoeren op Windows.
+- [x] Testmodules scheiden van productiecode onder `src/tests/` met behoud van logische modulepaden; volledige suite opnieuw controleren.
+- [ ] Uitvoeringslogging toevoegen en controleren; geen geheimen, parameterwaarden, executablepaden of procesoutput loggen.
+- [ ] Vijf echte gelijktijdige HTTP-uitvoeringen testen; de bestaande 503-test reserveert alleen vier permits.
+- [ ] Ctrl+C tijdens actieve HTTP-uitvoering handmatig of via integratie testen.
 - [ ] Formatter-/lintmeldingen oplossen en alle verplichte Cargo-controles opnieuw uitvoeren.
 
 ## Acceptatiecriteria
 
-- [ ] Alleen geconfigureerde executables voor parameterloze tools worden gestart; geen clientgestuurde command-, argument- of shellinvoer.
+- [x] HTTP laat executable en argumenten uitsluitend uit de registry komen; alleen `{}` en parameterloze tooldefinities worden toegelaten. Succes, invoerafwijzing en parameterafwijzing zijn getest.
 - [x] Stdout/stderr worden gelijktijdig en begrensd gelezen.
 - [x] Timeout, te grote output en volle capaciteit hebben voorspelbaar gedrag in de geteste Windows-scenario's, inclusief subprocessen en capaciteitsvrijgave.
 - [ ] Procesopruiming is getest en platformbeperkingen zijn expliciet.
@@ -74,12 +78,12 @@ Bouw F03 iteratief: begin met een kleine werkende verticale slice die een geconf
 - GitHub issue: nog vast te leggen.
 - Branch: feature/F03-procesuitvoering.
 - Pull request: nog niet aangemaakt.
-- Tests/handmatige verificatie (2026-10-29, Windows): 20 geslaagde execution-tests gerapporteerd via `cargo test --locked execution::tests`, naast 2 genegeerde helpers en 14 overige tests buiten het filter. De helpers draaien via bijbehorende tests als childproces. De code is gelezen; PID-controles gelden alleen op Windows. De eerdere volledige-suitecontrole (29 passed, 2 ignored) dateert van vóór de uitbreidingen. Formatter en Clippy waren afgekeurd en zijn niet opnieuw uitgevoerd; de waarschuwing voor ongebruikte `Cancelled` is niet meer gerapporteerd. Zie de [F03-notitie](../../notities/F03-procesuitvoering.md).
+- Tests/handmatige verificatie (2026-10-30, Windows): volledige suite na verplaatsing naar `src/tests/`: 55 passed, 0 failed, 2 ignored, 0 filtered out, 2,89 s (gerapporteerd resultaat). Echte POST naar `git_version`: succes, lege stderr, exitcode 0, duration 61 ms. Statusroute en Ctrl+C zonder actieve tools werken. Linux, logging, echte HTTP-concurrency en formatter-/Clippy-eindcontrole blijven open. Zie de [F03-notitie](../../notities/F03-procesuitvoering.md).
 - [Featurenotitie](../../notities/F03-procesuitvoering.md).
 
 ## Afronden
 
 - [ ] Relevante controles geslaagd.
-- [x] Documentatie en notitie bijgewerkt tot de gecontroleerde stand van 2026-10-29.
-- [x] Voortgang bijgewerkt tot de gecontroleerde stand van 2026-10-29.
+- [x] Documentatie en notitie bijgewerkt tot de gecontroleerde stand van 2026-10-30.
+- [x] Voortgang bijgewerkt tot de gecontroleerde stand van 2026-10-30.
 - [ ] PR gemerged; pas daarna status Klaar.

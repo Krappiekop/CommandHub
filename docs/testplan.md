@@ -1,48 +1,63 @@
 # Testplan
 
-Status: het volledige testplan is nog niet aangetoond. F00 is handmatig met een echte MCP-client getest; F02 heeft automatische configuratie- en routetests. Gerapporteerd testresultaat op 2026-10-29: 20 geslaagde execution-tests op Windows, naast 2 genegeerde helpers. De procesboomtests controleren subprocess-PID's; expliciete annulering is getest. Shutdown, future-drop/abort, Linux en HTTP-uitvoeringstests blijven open. Formatter, Clippy en de volledige suite zijn na de uitbreidingen niet opnieuw geverifieerd; eerdere controles en meldingen staan in de [F03-notitie](../notities/F03-procesuitvoering.md).
+Status bijgewerkt: 2026-10-30. F00 is handmatig met een echte MCP-client getest; F02 bevat configuratie- en ontdekkingstests. De actuele Windows-suite is gerapporteerd met **55 passed, 0 failed, 2 ignored**. HTTP-uitvoering, shutdown, future-drop/abort en begrensde Windows-procescontrole zijn toegevoegd. Logging, echte HTTP-concurrency, eindcontroles en Linux blijven open.
 
-| Eisen | Bewijs |
+| Eisen | Aanwezig bewijs en resterende controles |
 | --- | --- |
-| R01–R03 | Geldig bestand, onleesbaar bestand, kapotte JSON, duplicaten, ongeldige definities, registratie na herstart zonder rebuild |
-| R04–R06 | Tests voor toolselectie, succes, niet-nul exitcode, startfout, gelijktijdig stdout/stderr, timeout en platformwrapper. Windows-PID-controles na timeout, outputoverschrijding, eerder afgerond direct child en expliciete annulering. Een gesloten annuleringskanaal zonder bericht laat uitvoering doorgaan. Gerichte controles zijn als geslaagd gerapporteerd; shutdown, future-drop/abort en Linux-opruiming blijven open |
-| R07 | Gedeeld outputbudget voor streams en echte child-output boven 1 MiB, plus capaciteitsgrens/-vrijgave slagen in de Windows-suite. Requestbody boven 16 KiB en vijfde gelijktijdige HTTP-call blijven te testen |
-| R08–R10 | Verplichte/ontbrekende/verkeerde/onbekende parameters, optie-injectie, paden buiten root, symlinks |
-| R11/R16 | F00: handmatige `initialize`, listing/call met MCP Inspector CLI; aanvullende ongeldige protocolrequests en toepasselijke Origin/Host-controles blijven te verifiëren bij integratie |
-| R12/R13 | Routertests voor 400/404/413/502/503/504, niet-nul exitcode als HTTP 200, requestcontext en geen gevoelige inhoud in logs |
-| R14/R15 | Dezelfde kernscenario's op Windows en Linux; adapters gebruiken dezelfde kern |
-| R17 | Schone checkout met README starten; demo met succes, fout, logging en timeout |
+| R01–R03 | Configuratievalidatie en laadfouten; ontdekking via HTTP; eerdere handmatige herstartcontrole zonder rebuild |
+| R04–R06 | Toolselectie, succes, niet-nul exit, startfout, output, timeout, annulering en shutdown. Windows-PID-controles na stoproutes, future-drop en taakafbreking. Linux blijft open |
+| R07 | Gedeeld outputbudget, child-output boven 1 MiB, capaciteitsgrens/vrijgave. HTTP-body exact 16 KiB toegestaan en groter afgewezen. HTTP 503 bij vier vastgehouden permits; vijf echte gelijktijdige requests blijven te testen |
+| R08–R10 | F04: dynamische parameters, typen, onbekende velden, optie-injectie en padbeleid |
+| R11/R16 | F00: MCP Inspector CLI; protocol-/Origin-/Host-controles bij F05 verder verifiëren |
+| R12 | Windows-routetests voor succes, niet-nul exit als 200, 400/404/413/500/502/503/504 en shutdownafwijzing; echte POST naar geconfigureerde tool geslaagd |
+| R13 | Vaste foutcodes en geen OS-details in JSON getest. Uitvoeringslogging zonder gevoelige inhoud blijft open |
+| R14/R15 | Kern is transportonafhankelijk; HTTP-adapter gebruikt gedeelde state. Dezelfde kernscenario's en PID-opruiming op Linux blijven open |
+| R17 | README bevat start- en POST-voorbeeld; complete demo en schone-checkoutcontrole volgen bij oplevering |
 
-De outputlimiettest en procesboomtests gebruiken de testbinary zelf als child. De subprocess-helper start `ping` op Windows of `sleep` op Unix en schrijft het subprocess-ID naar een tijdelijk bestand. Markers via `--skip` kiezen optionele grote output of vroegtijdige terugkeer van de helper. De tests verwijderen oude bestanden vooraf en gebruiken afzonderlijke namen per scenario en bovenliggende testrun.
+## Testindeling
 
-Op Windows verzamelt `windows_process_ids` via `tasklist` de PID's en controleert de test dat het subprocess ontbreekt. De annuleringstest gebruikt `tokio::join!` om uitvoering en signaalgever samen te pollen en verstuurt pas een bericht zodra het PID-bestand een geldig getal bevat. Bij timeout/outputoverschrijding/annulering wordt ook gecontroleerd dat alle vier capaciteits-permits weer beschikbaar zijn.
+Alle vijf testbestanden staan in `src/tests/`: `config_tests.rs`, `execution_tests.rs`, `routes_tests.rs`, `execution_controller_tests.rs` en `execution_model_tests.rs`. De productiemodules koppelen ze met `#[cfg(test)]`, `#[path]` en `mod tests;`. De logische paden en toegang tot private code blijven gelijk. Deze indeling is geen zelfstandige integratiecrate onder `tests/` in de projecthoofdmap.
 
-Resterende testbeperkingen: Linux mist een daadwerkelijke PID-controle; Windows gebruikt één momentopname die timinggevoelig kan zijn. De blokkerende `tasklist`-aanroep wordt niet betrouwbaar begrensd door de async-timeout. Verbeter die bewaking en test server-shutdown en het afbreken/droppen van de future afzonderlijk. De tests tonen de benoemde scenario's aan, geen algemene garantie voor elke mogelijke procesboom.
+De twee genegeerde helpers worden bewust via de testbinary als child gestart met `--exact`, `--ignored` en `--nocapture`. De helper voor subprocessen start `ping` op Windows of `sleep` op Unix en schrijft een PID-bestand. Elke test gebruikt een eigen naam en verwijdert oude bestanden vooraf. Markers via `--skip` kiezen grote output of vroegtijdig afgerond child. Annulering en shutdown wachten met `join!` op een leesbaar PID.
+
+## Procesopruiming
+
+Op Windows verzamelt `windows_process_ids` via een Tokio-proces de PID's uit `tasklist`. Die aanroep heeft 3 s timeout en `kill_on_drop(true)`. `assert_windows_process_stopped` vraagt de lijst herhaald op met 50 ms tussenpozen en maximaal 5 s totale wachttijd. Zo wordt vertraagde beëindiging opgevangen. Dit is geen harde tijdsgarantie voor eventuele blokkerende OS-processtart.
+
+Tests bewaken ook capaciteitsvrijgave. Shutdown weigert nieuwe reserveringen en wacht op alle permits. Een afzonderlijke test houdt één permit vast om te bewijzen dat shutdown wacht. Future-drop en Tokio-`abort` zijn getest; na `abort` wordt de taak afgewacht voordat capaciteit en PID worden beoordeeld. Normaal stoppen gebruikt expliciete annulering/shutdown; drop/abort is een vangnet zonder teruggegeven uitvoerings-/opruimresultaat.
+
+Linux mist nog een daadwerkelijke processtatuscontrole en is niet uitgevoerd. Deze verificatie wordt als laatste behandeld via een nog te controleren CI-opzet; lokaal is geen Linux-omgeving beschikbaar.
+
+## HTTP-controles
+
+De tests lopen rechtstreeks door de router via `oneshot`, zonder TCP-poort. Ze controleren succes, resultaat-JSON, niet-nul exit, ongeldige JSON/contenttype/invoer, onbekende tool, parameters afwijzen, exacte bodygrens en overschrijding, startfout, timeout, outputlimiet, capaciteit en shutdownafwijzing. De capaciteitstest staat in `execution_tests.rs` om private permits te reserveren; hij start geen vier echte processen.
+
+Handmatig is een echte POST uitgevoerd naar `/tools/git_version` met JSON `{}`. Resultaat: succes, Git 2.55.0.windows.3 op stdout, lege stderr, exitcode 0, duration 61 ms. Statusroute en Ctrl+C zonder actieve tools zijn ook gecontroleerd. Ctrl+C tijdens actieve HTTP-uitvoering en vijf echte gelijktijdige requests blijven open.
 
 ## Controles
 
+```powershell
 cargo fmt --check
 cargo clippy --all-targets --locked -- -D warnings
 cargo test --locked
+```
 
 ## Meetresultaten
 
-Noteer per feature: datum, platform, commando, resultaat, beperkingen en verwijzing naar test/PR. Een timeouterror alleen bewijst niet dat het proces weg is.
-
-| Datum/platform | Controle | Resultaat en herkomst |
+| Datum/platform | Controle | Resultaat |
 | --- | --- | --- |
-| 2026-10-29, Windows | `cargo test --locked execution::tests` | Gerapporteerd: 20 geslaagd; 2 helpers genegeerd in de hoofdrun, 14 overige tests buiten het filter. Actuele code nagelezen |
-| 2026-10-29, Windows, vóór uitbreidingen | `cargo test --locked` | Toen 29 passed, 2 ignored; geen actuele volledige-suitecontrole na de latere wijzigingen |
-| 2026-10-29, Windows, vóór uitbreidingen | Formatter en Clippy | Toen afgekeurd; niet opnieuw uitgevoerd. Ongebruikte `Cancelled` is inmiddels niet meer gerapporteerd; overige meldingen nog te verifiëren |
+| 2026-10-30, Windows | `cargo test --locked` na testverplaatsing | Gerapporteerd: 55 passed, 0 failed, 2 ignored, 0 filtered out, 2,89 s |
+| 2026-10-30, Windows | Echte HTTP POST | `git_version`: succes, exitcode 0, duration 61 ms |
+| 2026-10-30, Windows | Status en Ctrl+C | Status werkt; terminalprompt keert terug, zonder actieve tools |
+| 2026-10-29, Windows | Eerdere formatter/Clippy-controles | Toen afgekeurd; geen actuele hercontrole na alle uitbreidingen |
 
-Bij deze documentatie-update zijn geen tests uitgevoerd; de opdracht beperkte zich tot documentatie. Linux was niet beschikbaar in deze Windows-sessie; shutdown en HTTP-uitvoering zijn nog niet geïmplementeerd.
+Bij deze documentatie-update zijn geen tests uitgevoerd; de opdracht beperkte zich tot documentatie. De actuele code en testindeling zijn nagelezen en de gerapporteerde resultaten zijn vastgelegd. Formatter en Clippy moeten nog worden uitgevoerd; Linux en uitvoeringslogging zijn niet geverifieerd.
 
 ## Demo
 
-1. Geldige configuratie laden.
-2. Tools ontdekken via HTTP en MCP.
-3. Tool uitvoeren en resultaat uitleggen.
-4. Ongeldige invoer afwijzen.
-5. Timeout en outputlimiet aantonen.
-6. Logging laten zien.
-7. Nieuwe tool toevoegen, herstarten en zonder rebuild gebruiken.
+1. Configuratie laden en tools ontdekken.
+2. Parameterloze tool uitvoeren via HTTP.
+3. Resultaat en niet-nul exit uitleggen.
+4. Invoerfouten, timeout, outputlimiet en volle capaciteit tonen.
+5. Logging en shutdown tijdens uitvoering aantonen zodra gecontroleerd.
+6. MCP-demo bij F05; complete demo en herstart zonder rebuild bij oplevering.

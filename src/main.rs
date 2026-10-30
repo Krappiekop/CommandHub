@@ -1,3 +1,4 @@
+mod app_state;
 mod config;
 mod controllers;
 mod execution;
@@ -24,6 +25,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let aantal_tools = config.tools.len();
     let registry = Arc::new(registry::ToolRegistry::new(config));
 
+    let state = app_state::AppState {
+        registry,
+        execution: Arc::new(execution::ExecutionService::new()),
+    };
+
     tracing::info!(aantal_tools, "Configuratie geladen");
 
     // Start de TCP-server en luister op poort 3000
@@ -31,13 +37,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
     tracing::info!(adres = %listener.local_addr()?, "CommandHub gestart");
 
     // Start de Axum-server met de router en registreer een handler voor Ctrl+C
-    axum::serve(listener, routes::router(registry))
-        .with_graceful_shutdown(async {
+    let execution = Arc::clone(&state.execution);
+
+    let server_result = axum::serve(listener, routes::router(state.clone()))
+        .with_graceful_shutdown(async move {
             if let Err(fout) = tokio::signal::ctrl_c().await {
                 tracing::error!(error = %fout, "Ctrl+C afhandeling mislukt");
             }
+
+            execution.begin_shutdown();
         })
-        .await?;
+        .await;
+
+    state.execution.shutdown().await;
+    server_result?;
 
     Ok(())
 }

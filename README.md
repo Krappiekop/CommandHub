@@ -4,7 +4,7 @@ CommandHub wordt een configuratiegestuurde MCP-server in Rust die externe comman
 
 ## Huidige status
 
-De hoofdapplicatie bevat `GET /status`, JSON-toolconfiguratie bij startup, een immutable toolregistry en `GET /tools` voor ontdekking. F02 is gemerged. F03 heeft een uitvoeringskern voor parameterloze tools met begrensde stdout/stderr, timeout, expliciete annulering en `process-wrap`-platformwrappers. Gerapporteerd testresultaat: 20 geslaagde execution-tests op Windows, naast 2 genegeerde helpers. De procesboomtests controleren via het subprocess-ID dat het subprocess na timeout, outputoverschrijding en annulering verdwenen is; ook een eerder afgerond direct child wordt getest. Server-shutdown, Linux-verificatie en de HTTP-uitvoerroute blijven open. Formatter en Clippy waren bij de laatste controle afgekeurd; de volledige Cargo-controles zijn na deze uitbreidingen niet opnieuw uitgevoerd. MCP-integratie volgt later; de afzonderlijke F00-proef met MCP via HTTP staat klaar voor review. Zie [de actuele voortgang](docs/voortgang.md), [de F00-notitie](notities/F00-mcp-proef.md) en [de F03-notitie](notities/F03-procesuitvoering.md).
+De hoofdapplicatie biedt `GET /status`, `GET /tools` en `POST /tools/{toolname}` voor geconfigureerde parameterloze tools. F02 is gemerged; F03 blijft In uitvoering. De uitvoeringskern begrenst output, tijd en capaciteit, ondersteunt expliciete annulering en sluit via gedeelde `AppState` aan op Ctrl+C. Gerapporteerde Windows-verificatie op 2026-10-30: 55 geslaagde tests, 2 genegeerde helpers en een succesvolle echte HTTP-aanroep van `git_version`. Tests staan apart in `src/tests/`. Open blijven uitvoeringslogging, vijf echte gelijktijdige HTTP-verzoeken, formatter-/Clippy-controles en als laatste Linux-verificatie. MCP-integratie volgt in F05; de afzonderlijke F00-proef staat klaar voor review. Zie [de actuele voortgang](docs/voortgang.md), [de F00-notitie](notities/F00-mcp-proef.md) en [de F03-notitie](notities/F03-procesuitvoering.md).
 
 ## Installeren en gebruiken
 
@@ -26,6 +26,14 @@ Open [de statusroute](http://127.0.0.1:3000/status):
 ```
 
 De server luistert alleen lokaal op poort 3000. Stop met Ctrl+C. Apache, PHP en MySQL zijn niet nodig.
+
+Voer met de server actief in een tweede PowerShell-terminal de geconfigureerde parameterloze tool uit:
+
+```powershell
+Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:3000/tools/git_version" -ContentType "application/json" -Body '{}' | ConvertTo-Json
+```
+
+De response bevat `success`, `stdout`, `stderr`, `exitCode` en `duration` in milliseconden. F03 accepteert alleen een leeg JSON-object; dynamische parameters volgen in F04. De requestbody mag maximaal 16 KiB zijn. Zie [het API-contract](docs/api-en-configuratie.md) voor foutresponses.
 
 ## Documentatie
 

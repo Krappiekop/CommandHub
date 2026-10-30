@@ -1,6 +1,6 @@
 # API- en configuratiecontract
 
-Status: `GET /status` en `GET /tools` zijn geïmplementeerd. Het uitvoeringscontract hieronder is vastgesteld voor F03; `POST /tools/{toolname}` is nog niet geïmplementeerd.
+Status: `GET /status`, `GET /tools` en `POST /tools/{toolname}` zijn geïmplementeerd. F03-uitvoering voor parameterloze tools is op Windows automatisch en via een echte HTTP-aanroep gecontroleerd. Dynamische parameters volgen in F04.
 
 ## HTTP
 
@@ -12,7 +12,7 @@ Status: `GET /status` en `GET /tools` zijn geïmplementeerd. Het uitvoeringscont
 
 Een optionele GET /tools/{toolname} kan later worden toegevoegd. Niet nodig om de eerste scope groter te maken.
 
-Beoogd uitvoeringsresultaat sluit aan op de opdracht:
+Het uitvoeringsresultaat heeft deze vorm:
 
 ```json
 {
@@ -31,14 +31,30 @@ Voor F03 geldt deze foutmapping:
 | Situatie | HTTP-status | Gedrag |
 | --- | --- | --- |
 | Ongeldige JSON of ongeldige invoer | 400 | Geen proces starten |
+| Geconfigureerde tool met parameters of placeholders | 400 | Niet starten; `parameters_not_supported` |
 | Onbekende tool | 404 | Geen proces starten |
 | Requestbody groter dan 16 KiB | 413 | Request afwijzen vóór JSON-deserialisatie |
 | Capaciteit van vier uitvoeringen bereikt | 503 | Direct afwijzen, niet in een wachtrij plaatsen |
+| Annulering of uitvoering na begonnen shutdown | 503 | `execution_cancelled`; bij actieve annulering eerst opruiming proberen |
+| Interne processtart-, lees-, wacht- of beëindigingsfout | 500 | `execution_failed`, zonder interne foutdetails |
 | Timeout | 504 | Procesboom beëindigen |
 | Gecombineerde stdout/stderr groter dan 1 MiB | 502 | Procesboom beëindigen; geen afgekapt succesresultaat teruggeven |
 | Proces gestart met niet-nul exitcode | 200 | Normaal uitvoeringsresultaat met `success: false` en de exitcode |
 
-Een requestbody voor F03 is een JSON-object; gebruik `{}` voor een parameterloze tool. Toolparameters en placeholders worden pas in F04 uitgevoerd.
+F03 accepteert uitsluitend een leeg JSON-object `{}` met `Content-Type: application/json`. Onbekende velden en andere JSON-typen worden met 400 en `invalid_input` afgewezen. JSON-extractiefouten, waaronder ontbrekend JSON-contenttype, geven 400 en `invalid_json`. Een body boven 16 KiB geeft 413 en `request_too_large`, vóór JSON-deserialisatie; precies 16 KiB is toegestaan. Toolparameters en placeholders volgen in F04.
+
+Foutresponses hebben het vaste formaat:
+
+```json
+{
+  "code": "unknown_tool",
+  "message": "Onbekende tool"
+}
+```
+
+Overige codes zijn `capacity_exceeded` (503), `execution_timeout` (504) en `output_limit_exceeded` (502). De response bevat geen interne OS-fouttekst. Een onbekende tool geeft pas 404 na geldige body/invoercontrole. Dit volgt uit de volgorde extractor → invoercontrole → toolselectie.
+
+Handmatig gecontroleerd op Windows op 2026-10-30: `POST /tools/git_version` met `{}` gaf `success: true`, stdout met Git-versie 2.55.0.windows.3, lege stderr, exitcode 0 en duration 61 ms. Een herhaalde uitvoering kan een andere duur opleveren.
 
 ## Configuratie
 
@@ -64,9 +80,9 @@ F03 hanteert maximaal 1 MiB gecombineerde stdout en stderr, maximaal 16 KiB requ
 
 Het childproces erft de omgeving en werkdirectory van het serverproces. De client kan deze niet instellen. Beheer van de serveromgeving is daarom onderdeel van het vertrouwensbeleid; omgevingswaarden worden niet gelogd.
 
-Timeout, outputoverschrijding en expliciete annulering worden in de F03-kern afgehandeld. [`process-wrap`](https://docs.rs/process-wrap/) 10.0.1 met feature `tokio1` gebruikt Unix `ProcessGroup`, Windows `JobObject` en `KillOnDrop`. Gerapporteerd testresultaat: 20 geslaagde execution-tests op Windows; subprocess-PID's worden na timeout, outputoverschrijding en annulering gecontroleerd, ook bij een eerder afgerond direct child. Linux-verificatie, server-shutdown en HTTP-integratie blijven open.
+Timeout, outputoverschrijding en expliciete annulering worden in de F03-kern afgehandeld. `process-wrap` 10.0.1 met `tokio1` gebruikt Unix `ProcessGroup`, Windows `JobObject` en `KillOnDrop`. Windows-tests controleren subprocess-PID's na timeout, outputoverschrijding, annulering, shutdown, future-drop en taakafbreking, ook bij een eerder afgerond direct child. Linux-verificatie blijft open.
 
-De interne methode `execute_parameterless_with_cancellation` ontvangt een `oneshot::Receiver<()>`. Een expliciet bericht leidt na de opruimroute tot `ExecutionError::Cancelled`; een opruimfout kan die uitkomst vervangen. Het sluiten van de zender zonder bericht annuleert niet. `execute_parameterless` blijft beschikbaar zonder expliciet annuleringsverzoek. Dit voegt geen publiek annuleringsendpoint toe. De HTTP/MCP-mapping voor annulering, clientdisconnects en shutdown moet nog worden vastgesteld; de bestaande HTTP-tabel hierboven dekt die situaties nog niet.
+De annuleerbare kernmethode ontvangt een `oneshot::Receiver<()>`. Een expliciet bericht leidt na de opruimroute tot `Cancelled`; een opruimfout kan die fout vervangen. Sluiten zonder bericht annuleert niet. Shutdown gebruikt daarnaast een `watch`-signaal, weigert nieuwe uitvoeringen en wacht op capaciteitsvrijgave. Ctrl+C is hierop aangesloten. De HTTP-mapping voor `Cancelled` is 503. Dit levert geen publiek annuleringsendpoint op; expliciet clientdisconnectbeleid en MCP-mapping blijven open.
 
 ## MCP
 
